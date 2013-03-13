@@ -1,4 +1,3 @@
 Verified generic fixpoint solvers.
 =======
-Aleksandr Karbyshev
-Kalmer Apinis
+by Aleksandr Karbyshev and Kalmer Apinis.
