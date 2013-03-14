@@ -1,4 +1,4 @@
-Require Export Lat.
+Require Export Lattice.
 Require Export Monads.
 Require Export Strategy.
 Require Export StrategyUtils.
