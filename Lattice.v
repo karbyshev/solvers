@@ -35,8 +35,8 @@ Module Type IsPOSet (Import X : UsualDecidableType).
   Axiom LeqRefl    : reflexive _ Leq.
   Axiom LeqTrans   : transitive _ Leq.
   Axiom LeqAntisym : antisymmetric _ Leq.
-  Definition isPO : order _ Leq.
-  Proof. split; [refine LeqRefl | refine LeqTrans | refine LeqAntisym]. Defined.
+  (*Definition isPO : order _ Leq.
+  Proof. split; [refine LeqRefl | refine LeqTrans | refine LeqAntisym]. Defined.*)
 
   Parameter leq   : t -> t -> bool.
   Axiom leqProper : BinRelOp Leq leq.
@@ -139,8 +139,8 @@ Module Dual (Import D : Lattice) <: Lattice.
   Lemma BotIsLeast : LeastElem Leq bot.
   Proof. now refine D.TopIsGreatest. Qed.
 
-  Definition isPO : order _ Leq.
-  Proof. split; [ refine LeqRefl | refine LeqTrans | refine LeqAntisym ]. Defined.
+  (*Definition isPO : order _ Leq.
+  Proof. split; [ refine LeqRefl | refine LeqTrans | refine LeqAntisym ]. Defined.*)
 End Dual.
 
 Module test (L:Lattice).
@@ -383,8 +383,8 @@ Module OptionLattice (B : Lattice) <: Lattice.
     destruct x, y; try f_equal; now firstorder.
   Qed.
 
-  Definition isPO : order _ Leq.
-  Proof. split; [refine LeqRefl | refine LeqTrans | refine LeqAntisym]. Defined.
+  (*Definition isPO : order _ Leq.
+  Proof. split; [refine LeqRefl | refine LeqTrans | refine LeqAntisym]. Defined.*)
 
   Lemma leqProper : BinRelOp Leq leq.
   Proof.

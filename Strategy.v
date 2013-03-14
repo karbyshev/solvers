@@ -45,6 +45,7 @@ Lemma evaltree_Que x k f :
   evaltree (Que x k) f = evaltree (k (f x)) f.
 Proof. easy. Qed.
 
+(* TODO: what is that for here? *)
 Definition evaltree_unit (t : STree) (f : A -> B)
   := fst ((@tree2fun t (State unit) (compose (@tval _ _) f)) ()).
 
@@ -94,8 +95,8 @@ induction t as [c | a k IH].
   destruct (wrap_rel_State_Ans_inv H'); subst.
   easy.
 - intros s [d1 s1] [d1' s1'] H H'.
-  destruct (wrap_rel_State_Que_inv H) as [d0 [s0 [Hf H0] ] ].
-  destruct (wrap_rel_State_Que_inv H') as [d0' [s0' [Hf' H0'] ] ].
+  destruct (wrap_rel_State_Que_inv H) as [d0 [s0 [Hf H0]]].
+  destruct (wrap_rel_State_Que_inv H') as [d0' [s0' [Hf' H0']]].
   assert (H1 := Hfun _ _ _ _ Hf Hf').
   inversion H1; subst; clear H1.
   now firstorder.
