@@ -1,5 +1,5 @@
 Require Export Common.
-Require Import Relations.Relation_Definitions.
+Require Export Relations.Relation_Definitions.
 Require Export Structures.Equalities.
 Require Export Program.Basics.
 Require Import Unicode.Utf8.
