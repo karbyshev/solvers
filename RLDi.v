@@ -286,7 +286,7 @@ Proof. intros H; now inversion H; subst; auto. Qed.
 Section algorithm.
 
 Variable Hpure : forall x, is_pure (F x).
-Definition rhs x : STree Var.t D.t D.t := proj1_sig (Hpure x).
+Definition rhs x : Tree Var.t D.t D.t := proj1_sig (Hpure x).
 
 Lemma rhs_spec x : F x = [[rhs x]].
 Proof. now rewrite (proj2_sig (Hpure x)). Qed.
@@ -312,43 +312,43 @@ with EvalGet_x :
 
 with Wrap_Eval_x :
   Var.t -> (Var.t -> state' -> D.t * state' -> Prop) ->
-  @STree Var.t D.t D.t ->
+  @Tree Var.t D.t D.t ->
   state' * list (Var.t * D.t) ->
   D.t * (state' * list (Var.t * D.t)) -> Prop :=
   | Wrap_Eval_x0 :
-    forall x f t svlist dsvlist0,
+    forall x f t sl dsl0,
       EvalGet_x x f ->
       let f' := instrR f in
-        [[t]]# f' svlist dsvlist0 ->
-      Wrap_Eval_x x f t svlist dsvlist0
+        [[t]]# f' sl dsl0 ->
+      Wrap_Eval_x x f t sl dsl0
 
 with Eval_rhs :
   Var.t ->
   state' -> D.t * (state' * list (Var.t * D.t)) -> Prop :=
   | Eval_rhs0 :
-    forall x f s dsvlist0,
+    forall x f s dsl0,
       EvalGet_x x f ->
-      Wrap_Eval_x x f (rhs x) (s,[]) dsvlist0 ->
-      Eval_rhs x s dsvlist0
+      Wrap_Eval_x x f (rhs x) (s,[]) dsl0 ->
+      Eval_rhs x s dsl0
 
 with Solve :
   Var.t -> state' -> state' -> Prop :=
   | Solve0 :
       forall x s, is_stable x s -> Solve x s s
   | Solve1 :
-      forall x d s s2 vlist,
+      forall x d s s2 ps,
       ~ is_stable x s ->
       let s1 := prepare x s in
-      Eval_rhs x s1 (d, (s2, vlist)) ->
+      Eval_rhs x s1 (d, (s2, ps)) ->
       let s3 := rem_called x s2 in
       let cur_val := getval s3 x in
       D.Leq d cur_val ->
       Solve x s s3
   | Solve2 :
-      forall x d s s2 s5 s6 vlist work,
+      forall x d s s2 s5 s6 ps work,
       ~ is_stable x s ->
       let s1 := prepare x s in
-      Eval_rhs x s1 (d, (s2, vlist)) ->
+      Eval_rhs x s1 (d, (s2, ps)) ->
       let s3 := rem_called x s2 in
       let cur_val := getval s3 x in
       ~ D.Leq d cur_val ->
@@ -1136,43 +1136,43 @@ Definition Inv_EvalGet_x
 
 Definition Inv_Wrap_Eval_x
   (x : Var.t) (f : Var.t -> state' -> D.t * state' -> Prop)
-  (t : STree Var.t D.t D.t)
-  (slist : state' * list (Var.t * D.t))
-  (dslist' : D.t * (state' * list (Var.t * D.t))) :=
-  let (s, vlist) := slist in
-  let '(d, (s', vlist')) := dslist' in
+  (t : Tree Var.t D.t D.t)
+  (sl : state' * list (Var.t * D.t))
+  (dsl' : D.t * (state' * list (Var.t * D.t))) :=
+  let (s, ps) := sl in
+  let '(d, (s', ps')) := dsl' in
   (*is_stable x s ->*)
   Inv_0 s ->
   Inv_corr s ->
   (forall p,
-     In p vlist ->
+     In p ps ->
      is_stable (fst p) s /\ D.Leq (snd p) (getval s (fst p))) ->
-  legal (rhs x) vlist ->
-  subtree (rhs x) vlist = Some t ->
+  legal (rhs x) ps ->
+  subtree (rhs x) ps = Some t ->
   Inv_0 s' /\
   Inv_1 s s' /\
-  incl vlist vlist' /\
-  (forall p, In p vlist' -> is_stable (fst p) s') /\
+  (*incl ps ps' /\*)
+  (*(forall p, In p ps' -> is_stable (fst p) s') /\*)
+  (*(forall p,
+     In p ps' ->
+     ~ In p ps ->
+     D.Leq (getval s (fst p)) (snd p)) /\*)
   (forall p,
-     In p vlist' ->
-     ~ In p vlist ->
-     D.Leq (getval s (fst p)) (snd p)) /\
-  (forall p,
-     In p vlist' ->
+     In p ps' ->
      D.Leq (snd p) (getval s' (fst p))) /\
   Inv_corr s' /\
   Inv_sigma s s' /\
   Inv_sigma_infl s s' /\
-  legal (rhs x) vlist' /\
-  subtree (rhs x) vlist' = Some (Ans d) /\
+  legal (rhs x) ps' /\
+  subtree (rhs x) ps' = Some (Ans d) /\
   (* case: x is called in s' *)
   (is_called x s' ->
-   valid (getval s) vlist ->
+   valid (getval s) ps ->
    (forall p,
-      In p vlist -> In x (get_infl s (fst p))) ->
-   valid (getval s') vlist' /\
+      In p ps -> In x (get_infl s (fst p))) ->
+   valid (getval s') ps' /\
    (forall p,
-      In p vlist' -> In x (get_infl s' (fst p))) /\
+      In p ps' -> In x (get_infl s' (fst p))) /\
    Inv_corr_var s' x) /\
   (* monotonic case *)
   (forall mu,
@@ -1184,7 +1184,7 @@ Definition Inv_Wrap_Eval_x
 Definition Inv_Eval_rhs
   (x : Var.t) (s : state')
   (dsl' : D.t * (state' * list (Var.t * D.t))) :=
-  let '(d, (s', l)) := dsl' in
+  let '(d, (s', ps)) := dsl' in
   (*is_stable x s ->*)
   Inv_0 s ->
   Inv_corr s ->
@@ -1194,16 +1194,16 @@ Definition Inv_Eval_rhs
   Inv_sigma s s' /\
   Inv_sigma_infl s s' /\
   (forall p,
-     In p l ->
-     D.Leq (getval s (fst p)) (snd p) /\
+     In p ps ->
+     (*D.Leq (getval s (fst p)) (snd p) /\*)
      D.Leq (snd p) (getval s' (fst p))) /\
-  legal (rhs x) l /\
-  subtree (rhs x) l = Some (Ans d) /\
+  legal (rhs x) ps /\
+  subtree (rhs x) ps = Some (Ans d) /\
   (is_called x s' ->
    d = [[rhs x]]* (getval s') /\
-   deps (rhs x) (getval s') = l /\
+   deps (rhs x) (getval s') = ps /\
    (forall p,
-      In p l -> In x (get_infl s' (fst p))) /\
+      In p ps -> In x (get_infl s' (fst p))) /\
    Inv_corr_var s' x) /\
   (* monotonic case *)
   (forall mu,
@@ -1322,7 +1322,7 @@ apply solve_mut_ind.
     destruct_pose_state s.
     destruct_pose_state s0.
     hnf. intuition.
-      * now firstorder.
+      (** now firstorder.*)
       * now firstorder.
       * assert (Hps' : ps' = deps (rhs x) (getval s0))
           by (eapply valid_legal_subtree_Ans; eauto).
@@ -1366,18 +1366,19 @@ apply solve_mut_ind.
     assert (Hsubcons :
               subtree (rhs x) (ps ++ [(v, d0)]) = Some (k d0))
       by (eapply subtree_step; eauto).
-    destruct Iwrap1 as [I0s1 [I1s1 [Hincl [H0ps1 [H1ps1 [H2ps1 [Icorrs1 [Isigs1 [Isiginfls1 [Hlegps1 [Hsubps1 [H Hmons0] ] ] ] ] ] ] ] ] ] ] ]; auto.
+    red in Iwrap1.
+    destruct Iwrap1 as [I0s1 [I1s1 (*[Hincl*) (*[H0ps1*) (*[H1ps1*) [H2ps1 [Icorrs1 [Isigs1 [Isiginfls1 [Hlegps1 [Hsubps1 [H Hmons0] ] ] ] ] ] ] (*]*) (*]*) (*]*) ] ]; auto.
     assert (Hsol01 : VS.Subset (get_solved s0) (get_solved s1))
       by (clear - I1s1; simpl in *; now fsetdec).
-    split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split] ] ] ] ] ] ] ] ] ] ]; auto.
+    split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split(*; [| split; [| split; [| split] ] ]*) ] ] ] ] ] ] ] ]; auto.
     * now eapply Inv_1_trans; eauto.
-    * clear - Hincl; now firstorder.
-    * intros p Hp1 Hp2.
+    (** clear - Hincl; now firstorder.*)
+    (** intros p Hp1 Hp2.
       case (in_dec VDeq_dec p (ps ++ [(v, d0)])) as [i | n];
         [| now apply D.LeqTrans with (y:=getval s0 (fst p)); auto].
       assert (ep : p = (v, d0)).
       { clear - i Hp2. apply in_app_or in i. now firstorder. }
-      now rewrite ep, e; unfold fst, snd.
+      now rewrite ep, e; unfold fst, snd.*)
     * now eapply Inv_sigma_trans; eauto.
     * now eapply Inv_sigma_infl_trans; eauto.
     * intros Hcalxs1 Hval Hpsinfl.
@@ -1412,7 +1413,7 @@ apply solve_mut_ind.
                 is_stable (fst p) s /\
                 D.Leq (snd p) (getval s (fst p))) by firstorder.
   assert (Htmp := Iwrapx (*Hstabx*) I0s Icorrs H (legal_nil _) (subtree_nil _)); clear Iwrapx H.
-  destruct Htmp as [I0s0 [I1ss0 [_ [_ [Hvlist1 [Hvlist2 [Icorrs0 [Isigs0 [Isiginfls0 [Hleg [Hsub [H Hmons] ] ] ] ] ] ] ] ] ] ] ].
+  destruct Htmp as [I0s0 [I1ss0 (*[_ [_*) (*[ Hvlist1*) [Hvlist2 [Icorrs0 [Isigs0 [Isiginfls0 [Hleg [Hsub [H Hmons] ] ] ] ] ] ] (*]*) (*] ]*) ] ].
   split; [| split; [| split; [| split; [| split;
     [| split; [| split; [| split; [| split] ] ] ] ] ] ] ]; auto.
   + intros Hcalxs0.
@@ -1459,7 +1460,8 @@ apply solve_mut_ind.
     by (now apply Inv_corr_prepare).
   assert (H := Ievalrhs (*Hstaxs'*) I0s' Icorrs'); clear Ievalrhs.
   destruct H as [I0s0 [I1s0 [Icorrs0 [Isigs' [Isiginfls' H] ] ] ] ].
-  split; [| split; [| split; [| split; [| split; [| split(*; [| split]*) ] ] ] ] ].
+  destruct H as [_ H].
+  split; [| split; [| split; [| split; [| split; [| split(*; [| split]*) ] ] ] ] ].  
   + clear - I0s0. simpl in *. split; now fsetdec.
   + clear - I1s0. simpl in *. intuition; now fsetdec.
   + red. now rewrite <- Egets'; rewrite Egets1.
@@ -1470,7 +1472,7 @@ apply solve_mut_ind.
     * now unfold s'.
   + case (is_called_dec x s0); [intro Hin | intro Hnotin].
     * apply Inv_corr_called; auto; [intuition |].
-      destruct H as [_ [_ [_ [H _] ] ] ].
+      destruct H as (*[_*) [_ [_ [H _] ] ] (*]*).
       destruct H as [H _]; auto.
       now rewrite <- H; fold cur.
     * now apply Inv_corr_notcalled.
@@ -1478,7 +1480,7 @@ apply solve_mut_ind.
   + intros _. clear - I1s0 I0s. simpl in *. now fsetdec.
   + rewrite Egets1.
     rewrite Egets' in H.
-    destruct H as [_ [_ [_ [_ H] ] ] ].
+    destruct H as (*[_*) [_ [_ [_ H] ] ] (*]*).
     now firstorder.
 
 (* Inv_Solve_2 *)
@@ -1498,6 +1500,7 @@ apply solve_mut_ind.
     by (now apply Inv_corr_prepare).
   assert (H := Ievalrhs (*Hstaxs'*) I0s' Icorrs'); clear Ievalrhs.
   destruct H as [I0s0 [I1s0 [Icorrs0 [Isigs' [Isiginfls' H] ] ] ] ].
+  destruct H as [_ H].
   assert (I0s0' : Inv_0 s0')
     by (clear - I0s0; simpl in *; now intuition).
   assert (I0s1 : Inv_0 s1).
@@ -1637,7 +1640,7 @@ apply solve_mut_ind.
   + intros mu Huniq Hmon Hsolmu Hlemu.
     cut (leqF (getval s1) mu); [now intuition |].
     intros z.
-    destruct H as [_ [_ [_ [_ H] ] ] ].
+    destruct H as (*[_*) [_ [_ [_ H] ] ] (*]*).
     destruct (Var.eq_dec z x) as [e | n].
     * subst z.
       rewrite Hvals1.

@@ -17,17 +17,17 @@ Definition instr (T : monadType) (f : A -> T B)
   := fun a l =>
        tbind (f a) (fun b => tval _ (b, (l ++ [(a,b)]))).
 
-Fixpoint deps (t : STree A B C) (f : A -> B) : list (A * B) :=
+Fixpoint deps (t : Tree A B C) (f : A -> B) : list (A * B) :=
   match t with
     | Ans _ => nil
     | Que x k => let d := f x in (x, d) :: deps (k d) f
   end.
 
-Definition deps_1 (t : STree A B C) (f : A -> B) : list (A * B) :=
+Definition deps_1 (t : Tree A B C) (f : A -> B) : list (A * B) :=
   let f' : A -> State (list (A * B)) B := @instr Id f in
     snd ([[t]] _ f' []).
 
-Lemma deps_1_app (t : STree A B C) (f : A -> B)
+Lemma deps_1_app (t : Tree A B C) (f : A -> B)
                  (l : list (A * B)) :
   let f' : A -> State (list (A * B)) B := @instr Id f in
     snd ([[t]] (State (list (A * B))) f' l) =
@@ -53,14 +53,14 @@ Qed.
 Definition valid (f : A -> B) (path : list (A * B)) :=
   forall p, In p path -> let (a, b) := p in b = f a.
 
-Fixpoint legal (t : STree A B C) (path : list (A * B)) :=
+Fixpoint legal (t : Tree A B C) (path : list (A * B)) :=
   match t, path with
     | _, nil => True
     | Ans _, _ :: _ => False
     | Que x k, (a, b) :: ps => a = x /\ legal (k b) ps
   end.
 
-Fixpoint subtree (t : STree A B C) (path : list (A * B)) :=
+Fixpoint subtree (t : Tree A B C) (path : list (A * B)) :=
   match t, path with
     | _, nil => Some t
     | Ans _, _ :: _ => None

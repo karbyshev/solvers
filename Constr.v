@@ -18,11 +18,13 @@ Module Type CSysJoinSemiLat.
   Parameter F : V.t -> FuncType V.t D.t D.t.
 End CSysJoinSemiLat.
 
-Module Type CSys.
+Module Type CSys <: CSysJoinSemiLat.
   Declare Module V : UsualDecidableTypeBoth.
   Declare Module D : Lattice.
   
-  Parameter F : forall (M : monadType), V.t -> (V.t -> M D.t) -> M D.t.
+  Parameter F : V.t -> FuncType V.t D.t D.t.
+  (*Parameter F :
+    forall (M : monadType), V.t -> (V.t -> M D.t) -> M D.t.*)
 End CSys.
 
 (* TODO *)
@@ -42,7 +44,7 @@ Module Type NatWNCSys.
   Parameter F : forall (M : monadType), V.t -> (V.t -> M D.t) -> M D.t.
 End NatWNCSys.
 
-Module Type CSysLocalSolver (Import C : CSys).
+(*Module Type CSysLocalSolver (Import C : CSys).
   Include D.
 
   Declare Module VSet : FSetInterface.WSfun (V).
@@ -68,9 +70,9 @@ Module Type CSysLocalSolver (Import C : CSys).
     Axiom A2: x ∈₁ sol -> (@F Error x σ) ≠ None.    
     Axiom A3: x ∈₁ sol -> (@F Error x σ) ⊑₁ σ x.
   End correctness.
-End CSysLocalSolver.
+End CSysLocalSolver.*)
 
-Module HSys (Import C:WNCSys) <: WNCSys.
+(*Module HSys (Import C:WNCSys) <: WNCSys.
   Module V := V.
   Module D := D.
   Import D.
@@ -78,5 +80,5 @@ Module HSys (Import C:WNCSys) <: WNCSys.
     do old <- get v;
        do new <- @F m v get;
           return m (if leq new old then old Δ new else old ∇ new).    
-End HSys.
+End HSys.*)
 

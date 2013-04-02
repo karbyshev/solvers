@@ -15,7 +15,7 @@ Module SolverRLD (Sys : CSysJoinSemiLat)
                  (VMap : MapsTypeOn (Sys.V)).
 
 Module Var := Sys.V.
-Module D   := Sys.D.
+Module D <: JoinSemiLattice := Sys.D.
 
 Module UtilD := UtilJoin (D).
 
@@ -176,7 +176,7 @@ Definition s_init : state
 Section algorithm.
 
 Variable Hpure : forall x, is_pure (F x).
-Definition rhs x : STree Var.t D.t D.t := proj1_sig (Hpure x).
+Definition rhs x : Tree Var.t D.t D.t := proj1_sig (Hpure x).
 
 Lemma rhs_spec x : F x = [[rhs x]].
 now rewrite (proj2_sig (Hpure x)).
@@ -201,7 +201,7 @@ with EvalGet_x :
 
 with Wrap_Eval_x :
   Var.t -> (Var.t -> state -> D.t * state -> Prop) ->
-  @STree Var.t D.t D.t ->
+  @Tree Var.t D.t D.t ->
   state -> D.t * state -> Prop :=
   | Wrap_Eval_x0 :
     forall x f t s0 ds1,
@@ -1586,3 +1586,54 @@ End termination.
 End algorithm.
 
 End SolverRLD.
+
+(* TODO this should go elsewhere actually *)
+Module SolverRLDcomplete (Sys : CSys)
+                         (VSet : SetsTypeOn (Sys.V))
+                         (VMap : MapsTypeOn (Sys.V)).
+
+Include SolverRLD (Sys)(VSet)(VMap).
+
+Section exactness.
+
+Variable Hpure : forall x, is_pure (F x).
+(*Definition rhs x : Tree Var.t D.t D.t := proj1_sig (Hpure x).*)
+
+Definition is_local_solution
+             (X X' : VS.t) (sigma : Var.t -> Sys.D.t)
+  := (forall z, VS.In z X -> VS.In z X') /\
+     (forall z v d,
+        VS.In z X' ->
+        In (v,d) (deps (rhs Hpure z) sigma) ->
+        VS.In v X') /\
+     (forall z,
+        VS.In z X' ->
+        D.Leq ([[rhs Hpure z]]* sigma) (sigma z)).
+
+Definition sol_ext X X' sigma (H : is_local_solution X X' sigma)
+  : Var.t -> Sys.D.t
+  := fun z =>
+       match VSetProps.In_dec z X' with
+           | left _ => sigma z
+           | right _ => Sys.D.top
+       end.
+
+Import Defs.
+
+Lemma sol_ext_is_solution
+        X X' sigma (H : @is_local_solution X X' sigma) :
+  is_solution (rhs Hpure) (@sol_ext X X' sigma H).
+Proof.
+destruct H as [H [H0 H1] ].
+intros x.
+unfold sol_ext at 2.
+case (VSetProps.In_dec x X') as [e | n]; auto.
+- rewrite <- (@deps_val_compat _ _ _ _ _ sigma _ eq_refl).
+  + now apply H1.
+  + intros [v d] i.
+    unfold sol_ext; simpl.
+    now case (VSetProps.In_dec v X'); firstorder.
+Qed.
+
+End exactness.
+End SolverRLDcomplete.

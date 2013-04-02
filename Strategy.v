@@ -19,26 +19,26 @@ End functionals.
 Section strategy.
 Variables A B C : Type.
 
-Inductive STree :=
-  Ans : C -> STree
-| Que : A -> (B -> STree) -> STree.
+Inductive Tree :=
+  Ans : C -> Tree
+| Que : A -> (B -> Tree) -> Tree.
 
-Fixpoint tree2funT (T : monadType) (t : STree) :=
+Fixpoint tree2funT (T : monadType) (t : Tree) :=
   match t with
     | Ans c => fun k => tval T c
     | Que a f =>
         fun k => k a >>= (fun b => @tree2funT T (f b) k)
   end.
 
-Definition tree2fun (t : STree) : FuncType A B C.
+Definition tree2fun (t : Tree) : FuncType A B C.
 intro T. refine (tree2funT t).
 Defined.
 
-Lemma tree2fun_simpl (t : STree) (T : monadType) :
+Lemma tree2fun_simpl (t : Tree) (T : monadType) :
   @tree2fun t T = tree2funT t.
 Proof. now unfold tree2fun. Qed.
 
-Definition evaltree (t : STree) (f : A -> B)
+Definition evaltree (t : Tree) (f : A -> B)
   := @tree2fun t Id f.
 
 Lemma evaltree_Que x k f :
@@ -46,20 +46,20 @@ Lemma evaltree_Que x k f :
 Proof. easy. Qed.
 
 (* TODO: what is that for here? *)
-Definition evaltree_unit (t : STree) (f : A -> B)
+Definition evaltree_unit (t : Tree) (f : A -> B)
   := fst ((@tree2fun t (State unit) (compose (@tval _ _) f)) ()).
 
 Lemma evaltree_unit_Que x k f :
   evaltree_unit (Que x k) f = evaltree_unit (k (f x)) f.
 Proof. easy. Qed.
 
-Lemma evaltree_same (t : STree) (f : A -> B) :
+Lemma evaltree_same (t : Tree) (f : A -> B) :
   evaltree t f = evaltree_unit t f.
 Proof. induction t; now firstorder. Qed.
 
 (* Interpreter of trees for relations *)
 Inductive wrap_rel_State {S}
-  : STree -> (A -> S -> B * S -> Prop) -> S -> C * S -> Prop :=
+  : Tree -> (A -> S -> B * S -> Prop) -> S -> C * S -> Prop :=
   | wrapAns :
       forall (f : A -> S -> B * S -> Prop) c s,
         wrap_rel_State (Ans c) f s (c,s)
@@ -107,9 +107,9 @@ End strategy.
 Implicit Arguments Ans [A B C].
 Implicit Arguments Que [A B C].
 
-Notation "[[ t ]]" := (@tree2fun _ _ _ (t : STree _ _ _)) (at level 60).
-Notation "[[ t ]]*" := (@evaltree _ _ _ (t : STree _ _ _)) (at level 60).
-Notation "[[ t ]]#" := (@wrap_rel_State _ _ _ _ (t : STree _ _ _)) (at level 60).
+Notation "[[ t ]]" := (@tree2fun _ _ _ (t : Tree _ _ _)) (at level 60).
+Notation "[[ t ]]*" := (@evaltree _ _ _ (t : Tree _ _ _)) (at level 60).
+Notation "[[ t ]]#" := (@wrap_rel_State _ _ _ _ (t : Tree _ _ _)) (at level 60).
 
 (*Definition isPure A B C (F : FuncType A B C)
   := exists t, forall (T : monadType), F T = [[t]] T.*)

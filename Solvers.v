@@ -46,16 +46,16 @@ eapply D.LeqTrans; [eapply H1 |]; auto.
 Qed.
 End LeqFun.
 
-Definition has_uniq_lookup {X} (rhs : X -> STree Var.t D.t D.t) :=
+Definition has_uniq_lookup {X} (rhs : X -> Tree Var.t D.t D.t) :=
   forall x, uniq_lookup (rhs x).
 
-Definition is_monotone {X} (rhs : X -> STree Var.t D.t D.t) :=
+Definition is_monotone {X} (rhs : X -> Tree Var.t D.t D.t) :=
   forall x f g, leqF f g -> D.Leq ([[rhs x]]* f) ([[rhs x]]* g).
 
-Definition is_solution (rhs : Var.t -> STree Var.t D.t D.t) mu
+Definition is_solution (rhs : Var.t -> Tree Var.t D.t D.t) mu
   := forall x, D.Leq ([[rhs x]]* mu) (mu x).
 
-Definition is_min_solution (rhs : Var.t -> STree Var.t D.t D.t) mu
+Definition is_min_solution (rhs : Var.t -> Tree Var.t D.t D.t) mu
   := is_solution rhs mu /\
      forall mu', is_solution rhs mu' -> leqF mu mu'.
 
