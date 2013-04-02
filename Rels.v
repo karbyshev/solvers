@@ -564,7 +564,6 @@ Variable A : Type.
 Variable eq_dec : forall x y : A, {x = y} + {x <> y}.
 
 Variable leA : relation A.
-Variable leA_wf : well_founded leA.
 
 Lemma lp_vector_to_lex_vector_inv n (v v' : vector A n) :
   strict (inv (lp_vector leA (n:=n))) v v' ->
