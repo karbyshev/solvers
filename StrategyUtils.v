@@ -62,33 +62,35 @@ Fixpoint legal (t : Tree A B C) (path : list (A * B)) :=
 
 Fixpoint subtree (t : Tree A B C) (path : list (A * B)) :=
   match t, path with
-    | _, nil => Some t
-    | Ans _, _ :: _ => None
+    | _, nil => t
+    | Ans _, _ => t
     | Que x k, (_, b) :: ps => subtree (k b) ps
   end.
 
-Lemma subtree_nil t : subtree t [] = Some t.
+Lemma subtree_nil t : subtree t [] = t.
 Proof. now destruct t. Qed.
 Hint Resolve subtree_nil.
 
 Lemma subtree_nil_eq t t' :
-  subtree t [] = Some t' -> t = t'.
-Proof.
-rewrite subtree_nil. intros H; now inversion H.
-Qed.
+  subtree t [] = t' -> t = t'.
+Proof. now rewrite subtree_nil. Qed.
 
-Lemma subtree_cons_elim t t1 p l :
-  subtree t (p :: l) = Some t1 ->
-  exists x k, t = Que x k.
+Lemma subtree_cons t l1 l2 :
+  subtree t (l1 ++ l2) = subtree (subtree t l1) l2.
 Proof.
-destruct t as [| x k].
-- intro H; now inversion H.
-- now eauto.
+revert t l2.
+induction l1 as [| [a b] l IH].
+- intros t l2. now rewrite app_nil_l, subtree_nil.
+- intros t l2.
+  rewrite <- app_comm_cons.
+  destruct t as [c | a0 t].
+  + simpl. now destruct l2.
+  + simpl. now rewrite IH.
 Qed.
 
 Lemma subtree_step t l x k v :
-  subtree t l = Some (Que x k) ->
-  subtree t (l ++ [(x, v)]) = Some (k v).
+  subtree t l = Que x k ->
+  subtree t (l ++ [(x, v)]) = k v.
 Proof.
 revert t.
 induction l as [| [a b] ps IH].
@@ -96,13 +98,13 @@ induction l as [| [a b] ps IH].
   rewrite app_nil_l.
   now rewrite (subtree_nil_eq e); simpl.
 - intros t Hsub.
-  rewrite <- app_comm_cons.
-  destruct (subtree_cons_elim Hsub) as [a1 [k1 ?] ]; subst t.
-  now firstorder.
+  rewrite subtree_cons, Hsub.
+  simpl.
+  now rewrite subtree_nil.
 Qed.
 
 Lemma subtree_Que x k l c :
-  subtree (Que x k) l = Some (Ans c) ->
+  subtree (Que x k) l = Ans c ->
   exists p ps, l = p :: ps.
 Proof.
 intro H. destruct l as [| p ps]; eauto.
@@ -154,7 +156,7 @@ Qed.
 
 Lemma legal_step t l x k v :
   legal t l ->
-  subtree t l = Some (Que x k) ->
+  subtree t l = Que x k ->
   legal t (l ++ [(x,v)]).
 Proof.
 revert t.
@@ -167,17 +169,6 @@ induction l as [| [a b] ps IH].
   elim (legal_cons_elim Hleg); intros k1 e.
   simpl in e; subst t.
   now firstorder.
-Qed.
-
-Lemma legal_subtree t l :
-  legal t l -> exists s, subtree t l = Some s.
-Proof.
-revert t.
-induction l as [| [a b] ps].
-- intros t _. exists t. now apply subtree_nil.
-- intros t Hleg.
-  destruct (legal_cons_elim Hleg) as [k e].
-  subst t. now firstorder.
 Qed.
 
 Lemma deps_valid t f : valid f (deps t f).
@@ -194,7 +185,7 @@ Hint Resolve deps_legal.
 
 Lemma deps_subtree t sigma :
   let c := [[t]]* sigma in
-  subtree t (deps t sigma) = Some (Ans c).
+  subtree t (deps t sigma) = Ans c.
 Proof.
 intro c. induction t as [| x k H]; now firstorder.
 Qed.
@@ -244,7 +235,7 @@ Qed.
 
 Lemma legal_app t t1 l1 l2 :
   legal t l1 ->
-  subtree t l1 = Some t1 ->
+  subtree t l1 = t1 ->
   legal t1 l2 ->
   legal t (l1 ++ l2).
 Proof.
@@ -258,30 +249,30 @@ induction l1 as [| [a b] l1 IH1]; simpl.
 Qed.
 
 Lemma subtree_app t t1 t2 l1 l2 :
-  subtree t l1 = Some t1 ->
-  subtree t1 l2 = Some t2 ->
-  subtree t (l1 ++ l2) = Some t2.
+  subtree t l1 = t1 ->
+  subtree t1 l2 = t2 ->
+  subtree t (l1 ++ l2) = t2.
 Proof.
 revert t t1 t2 l2.
 induction l1 as [| [a b] l1 IH1]; simpl.
 - intros t t1 t2 l2 e. now rewrite (subtree_nil_eq e).
 - intros t t1 t2 l2 H1 H2.
-  destruct (subtree_cons_elim H1) as [x [k e] ]; subst t.
-  simpl. now eapply IH1; eauto.
+  rewrite app_comm_cons.
+  now rewrite subtree_cons, H1.
 Qed.
 
 Lemma valid_legal_subtree_Ans t l sigma c :
   valid sigma l ->
   legal t l ->
-  subtree t l = Some (Ans c) ->
+  subtree t l = Ans c ->
   l = deps t sigma /\ c = [[t]]* sigma.
 Proof.
 revert t. induction l as [| [a b] ps IH].
 - intros t Hval Hleg Hsub.
   now rewrite (subtree_nil_eq Hsub).
 - intros t Hval Hleg Hsub.
-  destruct (subtree_cons_elim Hsub) as [x [k ?] ]; subst t.
-  simpl in Hsub, Hleg. destruct Hleg as [? Hleg]; subst x.
+  destruct (legal_cons_elim Hleg) as [k ?]; subst t.
+  simpl in Hsub, Hleg. destruct Hleg as [_ Hleg].
   assert (e : b = sigma a) by (rewrite (Hval (a, b)); intuition).
   subst b. simpl. split.
   + f_equal. now apply IH; firstorder.
@@ -344,7 +335,7 @@ Lemma uniq_deps_f
         t c f ps :
   uniq_lookup t ->
   legal t ps ->
-  subtree t ps = Some (Ans c) ->
+  subtree t ps = Ans c ->
   exists f',
     deps t f' = ps /\
     valid f' ps /\
@@ -357,10 +348,10 @@ induction ps as [| [a b] ps IH].
   rewrite (subtree_nil_eq Hsub); clear dependent t.
   now exists f; auto.
 - intros t Huniq Hleg Hsub.
-  destruct (subtree_cons_elim Hsub) as [x [k ?] ]; subst.
+  destruct (legal_cons_elim Hleg) as [k ?]; subst.
   specialize IH with (k b).
   assert (Huniq1 : uniq_lookup (k b)) by eauto.
-  simpl in Hleg. destruct Hleg as [? Hleg]; subst x.
+  simpl in Hleg. destruct Hleg as [_ Hleg].
   simpl in Hsub.
   destruct IH as [f0 H]; auto.
   destruct H as [Hdepsf0 [Hvalf0 Hf0] ].

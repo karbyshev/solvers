@@ -1148,7 +1148,7 @@ Definition Inv_Wrap_Eval_x
      In p ps ->
      is_stable (fst p) s /\ D.Leq (snd p) (getval s (fst p))) ->
   legal (rhs x) ps ->
-  subtree (rhs x) ps = Some t ->
+  subtree (rhs x) ps = t ->
   Inv_0 s' /\
   Inv_1 s s' /\
   (*incl ps ps' /\*)
@@ -1164,7 +1164,7 @@ Definition Inv_Wrap_Eval_x
   Inv_sigma s s' /\
   Inv_sigma_infl s s' /\
   legal (rhs x) ps' /\
-  subtree (rhs x) ps' = Some (Ans d) /\
+  subtree (rhs x) ps' = Ans d /\
   (* case: x is called in s' *)
   (is_called x s' ->
    valid (getval s) ps ->
@@ -1198,7 +1198,7 @@ Definition Inv_Eval_rhs
      (*D.Leq (getval s (fst p)) (snd p) /\*)
      D.Leq (snd p) (getval s' (fst p))) /\
   legal (rhs x) ps /\
-  subtree (rhs x) ps = Some (Ans d) /\
+  subtree (rhs x) ps = Ans d /\
   (is_called x s' ->
    d = [[rhs x]]* (getval s') /\
    deps (rhs x) (getval s') = ps /\
@@ -1363,8 +1363,7 @@ apply solve_mut_ind.
         subst p. unfold fst, snd. now subst d0; auto. }
     assert (Hlegcons : legal (rhs x) (ps ++ [(v, d0)]))
       by (eapply legal_step; eauto).
-    assert (Hsubcons :
-              subtree (rhs x) (ps ++ [(v, d0)]) = Some (k d0))
+    assert (Hsubcons : subtree (rhs x) (ps ++ [(v, d0)]) = k d0)
       by (eapply subtree_step; eauto).
     red in Iwrap1.
     destruct Iwrap1 as [I0s1 [I1s1 (*[Hincl*) (*[H0ps1*) (*[H1ps1*) [H2ps1 [Icorrs1 [Isigs1 [Isiginfls1 [Hlegps1 [Hsubps1 [H Hmons0] ] ] ] ] ] ] (*]*) (*]*) (*]*) ] ]; auto.

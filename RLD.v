@@ -1079,7 +1079,6 @@ Qed.
 Definition strictS (R : relation VS.t) : relation VS.t :=
   fun s t => R s t /\ ~ VS.Equal s t.
 
-(* TODO ???*)
 Lemma card_Acc n :
   forall s,
     n + VS.cardinal s = cardV ->
