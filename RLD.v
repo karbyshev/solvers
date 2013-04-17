@@ -1556,11 +1556,10 @@ assert (Hevalrhs : Eval_rhs x s0 (d,s1))
 pose (cur := getval s1 x).
 pose (new := D.join cur d).
 destruct (D.eq_dec new cur) as [e | n].
-- assert (Hleq : D.Leq d cur).
-  { rewrite <- e; unfold new. now apply D.JoinUnique. }
+- assert (Hleq : D.Leq d cur) by now rewrite <- e; subst.
   exists s1. now apply Solve1 with (d:=d); auto.
 - assert (Hnleq : ~ D.Leq d cur).
-  { contradict n. unfold new. now apply UtilD.joinSubsumeR. }
+  { contradict n. unfold new. now apply UtilD.joinSubsume2. }
   pose (s2 := setval x new s1).
   destruct (extract_work x s2) as [w s3] eqn: Hwork.
   symmetry in Hwork.
