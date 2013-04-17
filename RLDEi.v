@@ -119,6 +119,7 @@ Definition is_stable x (s : state') :=
   let '(_, _, stable, _, _) := s in VS.In x stable.
 
 Lemma is_stable_dec x s : {is_stable x s} + {~ is_stable x s}.
+Proof.
 destruct_state s. simpl. now apply VSetProps.In_dec.
 Qed.
 
@@ -653,36 +654,30 @@ Local Hint Resolve Inv_1_refl.
 
 Lemma Inv_1_trans s1 s2 s3 :
   Inv_1 s1 s2 -> Inv_1 s2 s3 -> Inv_1 s1 s3.
+Proof.
 destruct_state s1; destruct_state s2; destruct_state s3.
 simpl. intuition; now fsetdec.
 Qed.
 
 Definition Inv_sigma (s s' : state') :=
-  forall z : Var.t, D.Leq (getval s z) (getval s' z).
+  leqF (getval s) (getval s').
 
 Lemma Inv_sigma_refl (s : state') : Inv_sigma s s.
-Proof.
-destruct_state s; now firstorder.
-Qed.
+Proof. destruct_state s; now firstorder. Qed.
 Local Hint Resolve Inv_sigma_refl.
 
 Lemma Inv_sigma_trans s1 s2 s3 :
   Inv_sigma s1 s2 -> Inv_sigma s2 s3 -> Inv_sigma s1 s3.
-Proof.
-unfold Inv_sigma. intros. now eapply D.LeqTrans; eauto.
-Qed.
+Proof. intros; now eapply leqF_trans; eauto. Qed.
 
 Lemma Inv_sigma_prepare x s : Inv_sigma s (prepare x s).
-red. now destruct_state s.
-Qed.
+Proof. intro; now destruct_state s. Qed.
 Local Hint Resolve Inv_sigma_prepare.
 
 Lemma Inv_sigma_lemma1 s1 s2 x y :
   Inv_sigma s1 s2 ->
   Inv_sigma s1 (add_infl y x s2).
-Proof.
-now destruct_state s1; destruct_state s2.
-Qed.
+Proof. now destruct_state s1; destruct_state s2. Qed.
 
 Lemma Inv_sigma_extract_work s1 s2 s3 x work:
   Inv_sigma s1 s2 ->
@@ -719,6 +714,7 @@ Definition Inv_corr_var (s : state') x :=
 
 Lemma Inv_corr_prepare s (x : Var.t) :
   Inv_corr s -> Inv_corr (prepare x s).
+Proof.
 destruct_pose_state s.
 set (s1 := prepare x s).
 intros Hcorrs.
@@ -1070,6 +1066,7 @@ split.
 Qed.
 
 Lemma Inv_sigma_infl_prepare s x : Inv_sigma_infl s (prepare x s).
+Proof.
 destruct_pose_state s. set (s1 := prepare x s).
 red.
 assert (Hval : getval s1 = getval s) by auto.
@@ -1242,7 +1239,7 @@ Definition Inv_Eval_rhs
     is_monotone rhs ->
     is_solution rhs mu ->
     leqF (getval s) mu ->
-    leqF (getval s') mu /\ D.Leq d (mu x)).
+    leqF (getval s') mu /\ (is_called x s' -> D.Leq d (mu x))).
 
 Definition Inv_Solve
   (x : Var.t) (s s' : state') :=
@@ -1452,40 +1449,12 @@ apply solve_mut_ind.
     * symmetry.
       eapply valid_legal_subtree_Ans; eauto; now intuition.
   + split; auto.
-    assert (Hcalxs0 : is_called x s0) by admit.
-    assert (Htmp : forall p : Var.t * D.t, In p [] -> In x (get_infl s (fst p)))
-           by firstorder.
-    assert (Htmp0 := H Hcalxs0 (valid_nil _) Htmp); clear H Htmp; rename H0 into H.
-    destruct Htmp0.
-    assert (Hdf' : d = [[rhs x]]* (getval s0))
-      by (eapply valid_legal_subtree_Ans; eauto).
-    apply D.LeqTrans with (y:=[[rhs x]]* mu); auto.
-    
-    easy.
-    auto.
-    
     intros Hcalxs0.
-    assert (Hd : d = evaltree (rhs x) (getval s0)) by intuition.
+    assert (Hval : valid (getval s0) vlist) by now apply H.
+    assert (Hd : d = [[rhs x]]* (getval s0))
+      by now eapply valid_legal_subtree_Ans; eauto.
     rewrite Hd.
     now apply D.LeqTrans with (y:=[[rhs x]]* mu); auto.
-
-intros mu Hmon Hsol Hlemu.
-    split; auto.
-    assert (Htmp := uniq_deps_f Var.eq_dec (getval s) (Huniq x) Hleg Hsub).
-    destruct Htmp as [f' [Hdepf' [Hvalf' Hf'] ] ].
-    assert (Hdf' : d = [[rhs x]]* f')
-      by (eapply valid_legal_subtree_Ans; eauto).
-    assert (Hlef' : leqF f' (getval s0)).
-    { intros z.
-      destruct (in_dec Var.eq_dec z (fst (split vlist)))
-               as [Hi | Hn].
-      - assert (Hin : In (z, f' z) vlist)
-          by (eapply deps_split_val; eauto).
-        now apply Hvlist2 with (p:=(z, f' z)).
-      - now rewrite <- Hf'. }
-    rewrite Hdf'.
-    apply D.LeqTrans with (y:=[[rhs x]]* mu); auto.
-    now apply D.LeqTrans with (y:=[[rhs x]]* (getval s0)); auto.
 
 (* Inv_Solve 0 *)
 - idtac. red. now intuition; auto.
@@ -1494,8 +1463,28 @@ intros mu Hmon Hsol Hlemu.
 - idtac. intros x d s s0 vlist.
   destruct_pose_state s.
   destruct_pose_state s0.
+  intros Hnstabx s' Hevalrhs Ievalrhs Hncalxs0.
+  red. intros I0s Icorrs.
+  assert (Hcalxs' : is_called x s') by (simpl; now fsetdec).
+  assert (I0s' : Inv_0 s')
+    by (clear - I0s; simpl in *; split; now fsetdec).
+  assert (Icorrs' : Inv_corr s')
+    by (now apply Inv_corr_prepare).
+  assert (H := Ievalrhs I0s' Icorrs'); clear Ievalrhs.
+  destruct H as [I0s0 [I1s0 [Icorrs0 [Isigs' [Isiginfls' H] ] ] ] ].
+   split; [| split; [| split; [| split; [| split; [| split ] ] ] ] ]; auto; try easy.
+  + clear - I1s0 Hncalxs0. simpl in *. intuition; now fsetdec.
+  + intros _.
+    clear - I1s0 Hncalxs0. simpl in *. now fsetdec.
+  + destruct H as [_ [_ [_ [_ H] ] ] ].
+    now firstorder.
+
+(* Inv_Solve 2 *)
+- idtac. intros x d s s0 vlist.
+  destruct_pose_state s.
+  destruct_pose_state s0.
   intros Hnstabx s' Hevalrhs Ievalrhs.
-  intros s1 cur Hleq.
+  intros Hcalxs0 s1 cur Hleq.
   assert (Egets' : getval s' = getval s) by auto.
   assert (Egets1 : getval s1 = getval s0) by auto.
   red. intros I0s Icorrs.
@@ -1529,14 +1518,14 @@ intros mu Hmon Hsol Hlemu.
     destruct H as (*[_*) [_ [_ [_ H] ] ] (*]*).
     now firstorder.
 
-(* Inv_Solve_2 *)
+(* Inv_Solve_3 *)
 - idtac. intros x d s s0 s1 s2 vlist work.
   destruct_pose_state s.
   destruct_pose_state s0.
   destruct_pose_state s1.
   destruct_pose_state s2.
   intros Hnstabx s' Hevalrhs Ievalrhs.
-  intros s0' cur Hleq new s0'' Hhand Hsolveall Isolveall.
+  intros Hcalxs0 s0' cur Hleq new s0'' Hhand Hsolveall Isolveall.
   intros I0s Icorrs.
   assert (Egets' : getval s' = getval s) by auto.
   (*assert (Hstaxs' : is_stable x s') by (simpl; now fsetdec).*)
@@ -1683,7 +1672,7 @@ intros mu Hmon Hsol Hlemu.
     clear - Htmp Hsol2 I1s0 I1s2.
     (*destruct H0 as [H01 [H02 [H03 _] ] ].*)
     simpl in *. now intuition; fsetdec.
-  + intros mu Huniq Hmon Hsolmu Hlemu.
+  + intros mu Huniq Hmon Hsolmu. (*Hlemu.*)
     cut (leqF (getval s1) mu); [now intuition |].
     intros z.
     destruct H as (*[_*) [_ [_ [_ H] ] ] (*]*).
@@ -1761,468 +1750,8 @@ intros mu Hmon Hsol Hlemu.
 Qed.
 (*XXX*)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Lemma InvariantsLemma :
-  (forall x y s1 p,
-     EvalGet x y s1 p -> Inv_EvalGet x y s1 p) /\
-  (forall x f,
-    EvalGet_x x f -> Inv_EvalGet_x x f) /\
-  (forall x f t slist1 dslist2,
-    Wrap_Eval_x x f t slist1 dslist2 ->
-    Inv_Wrap_Eval_x x f t slist1 dslist2) /\
-  (forall x s1 dslist2,
-    Eval_rhs x s1 dslist2 -> Inv_Eval_rhs x s1 dslist2) /\
-  (forall x s1 s2,
-    Solve x s1 s2 -> Inv_Solve x s1 s2) /\
-  (forall w s1 s2,
-    SolveAll w s1 s2 -> Inv_SolveAll w s1 s2).
-(*Admitted.*)
-(*XXX*)
-
-Proof.
-apply solve_mut_ind.
-
-(* EvalGet *)
-- intros x y s s0. idtac.
-  destruct_pose_state s.
-  destruct_pose_state s0.  
-  intros H Hinv s1 d.
-  intros Hstab I0s Icorrs. unfold fst, snd.
-  assert (Hval : getval s1 = getval s0) by auto.
-  rewrite Hval. split; auto.
-  unfold Inv_Solve in Hinv.
-  destruct Hinv as [I0 [I1 [Isig [Isiginfl [Icor [Hstaby [Hnstaby Hmon] ] ] ] ] ] ]; auto.
-  split; [| split; [| split; [| split; [| split; [| split] ] ] ] ].
-  + red. now rewrite Hval.
-  + now apply Inv_sigma_infl_lemma1.
-  + now apply Inv_corr_lemma1.
-  + simpl; rewrite add_eq_o; now intuition.
-  + intro Hy. rewrite Hstaby; auto.
-    split; [| split; [| split; [| split; [| split] ] ] ]; auto with set.
-    * simpl; now rewrite add_eq_o.
-    * intros z ne. simpl. now rewrite add_neq_o; auto.
-  + intro Hny. split; [| split].
-    * now intuition.
-    * now intuition.
-    * clear - Hnstaby Hny; simpl in *; now fsetdec.
-  + now intuition.
-
-(* Inv_EvalGet_x *)
-- idtac. now intuition.
-
-(* Inv_Wrap_Eval_x *)
-- idtac.
-  intros x f.
-  induction t as [| v k IH].
-  + intros [s ps] [d [s0 ps'] ] Evalgetx Ievalgetx f' Hf'.
-    inversion_clear Hf'; subst.
-    destruct_pose_state s.
-    destruct_pose_state s0.
-    hnf. intuition.
-      * now firstorder.
-      * now firstorder.
-      * assert (Hps' : rev ps' = deps (rhs x) (getval s0))
-          by (eapply valid_legal_subtree_Ans; eauto).
-        hnf. rewrite <- Hps'; clear Hps'.
-        assert (Hinrev := (in_rev ps')); now firstorder.
-  + intros [s ps] [d [s1 ps'] ] Evalgetx Ievalgetx f' Hf'.
-    destruct (f v s) as [d0 s0] eqn:Hf.
-    simpl in Hf'; rewrite Hf in Hf'; simpl in Hf'.
-    revert Hf Hf'.
-    destruct_pose_state s.
-    destruct_pose_state s0.
-    destruct_pose_state s1.
-    intros Hf Hf'.
-    red. intros Hxsta I0s Icorrs Hps Hpsleg Hpssub.
-    assert (Htmp := Ievalgetx _ _ _ Hf).
-    unfold Inv_EvalGet, snd, fst in Htmp.
-    destruct Htmp as [e [Isigs0 [Isiginfls0 [Icorrs0 [Hxinfl [Hvsta [Hvnsta Hmons] ] ] ] ] ] ]; auto.
-    assert (Iwrap1 := IH _ _ _ Evalgetx Ievalgetx Hf').
-    assert (Hxstas' : is_stable x s0).
-    { clear - Hvsta Hvnsta Hxsta.
-      case (is_stable_dec v s) as [i | n];
-        simpl in *; now intuition; fsetdec. }
-    assert (I0s0 : Inv_0 s0).
-    { clear - Hvsta Hvnsta I0s.
-      case (is_stable_dec v s) as [i | n];
-        simpl in *; now intuition; fsetdec. }
-    assert (I1s0 : Inv_1 s s0).
-    { clear - Hvsta Hvnsta.
-      case (is_stable_dec v s) as [i | n];
-        simpl in *; now intuition; fsetdec. }
-    assert (Hcons : forall p,
-                      In p ((v, d0) :: ps) ->
-                      is_stable (fst p) s0 /\
-                      D.Leq (snd p) (getval s0 (fst p))).
-    { intros p Hp.
-      case (in_inv Hp) as [ep | Hin].
-      - subst p. unfold fst, snd. subst d0. split; auto.
-        clear - Hvsta Hvnsta.
-        case (is_stable_dec v s) as [i | n];
-          simpl in *; now intuition; fsetdec.
-      - assert (Htmp := Hps _ Hin).
-        split.
-        + clear - Htmp Hvnsta Hvsta.
-          case (is_stable_dec v s) as [i | n];
-            simpl in *; now intuition; fsetdec.
-        + now apply (D.LeqTrans (proj2 Htmp)). }
-    assert (Hlegcons : legal (rhs x) (rev ((v, d0) :: ps)))
-      by (eapply legal_step; eauto).
-    assert (Hsubcons :
-              subtree (rhs x) (rev ((v, d0) :: ps)) = Some (k d0))
-      by (eapply subtree_step; eauto).
-    destruct Iwrap1 as [I0s1 [I1s1 [Hincl [H0ps1 [H1ps1 [H2ps1 [Icorrs1 [Isigs1 [Isiginfls1 [Hlegps1 [Hsubps1 [H Hmons0] ] ] ] ] ] ] ] ] ] ] ]; auto.
-    assert (Hsol01 : VS.Subset (get_solved s0) (get_solved s1))
-      by (clear - I1s1; simpl in *; now fsetdec).
-    split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split] ] ] ] ] ] ] ] ] ] ]; auto.
-    * now eapply Inv_1_trans; eauto.
-    * clear - Hincl; now firstorder.
-    * intros p Hp1 Hp2.
-      case (in_dec VDeq_dec p ((v, d0) :: ps)) as [i | n];
-        [| now apply D.LeqTrans with (y:=getval s0 (fst p)); auto].
-      assert (ep : p = (v, d0)) by (clear - i Hp2; firstorder).
-      now rewrite ep, e; unfold fst, snd.
-    * now eapply Inv_sigma_trans; eauto.
-    * now eapply Inv_sigma_infl_trans; eauto.
-    * intros Hcalxs Hval Hpsinfl Hcalxs1.
-      assert (Hcalxs0 : is_called x s0)
-        by (clear - Hcalxs1 I1s1; simpl in *; now fsetdec).
-      assert (H1 : forall p, In p ps -> getval s (fst p) = getval s0 (fst p))
-        by (eapply Lem_x_infl_getval; eauto).
-      assert (Hvalcons : valid (getval s0) (rev ((v, d0) :: ps))).
-      { simpl. apply valid_app; [| rewrite e; now apply valid_cons ].
-        apply valid_compat with (f1:=getval s); auto.
-        assert (Hinrev := in_rev ps). clear - Hinrev H1; now firstorder. }
-      assert (H2 : forall p, In p ((v, d0) :: ps) ->
-                             In x (get_infl s0 (fst p))).
-      { intros p Hin. case (in_inv Hin) as [i | n]; clear Hin.
-        - now subst p; unfold fst.
-        - apply (proj1 (Isiginfls0 (fst p))); auto.
-          now rewrite H1; auto. }
-      now auto.
-
-(* Inv_Eval_rhs *)
-- idtac.
-  intros x f s [d [s0 vlist] ].
-  destruct_pose_state s.
-  destruct_pose_state s0.
-  intros Hevalgetx Ievalgetx Hwrapx Iwrapx.
-  intros Hcalx I0s Icorrs.
-  assert (Hstabx : is_stable x s)
-    by (clear - Hcalx I0s; simpl in *; fsetdec).
-  red in Iwrapx.
-  assert (H : forall p : Var.t * D.t,
-                In p [] -> is_stable (fst p) s /\
-                D.Leq (snd p) (getval s (fst p)))
-    by firstorder.
-  assert (e : forall A, @rev A [] = []) by auto.
-  rewrite e in Iwrapx; clear e.
-  assert (Htmp := Iwrapx Hstabx I0s Icorrs H (legal_nil _) (subtree_nil _)); clear Iwrapx H.
-  destruct Htmp as [I0s0 [I1ss0 [_ [_ [Hvlist1 [Hvlist2 [Icorrs0 [Isigs0 [Isiginfls0 [Hleg [Hsub [H Hmons] ] ] ] ] ] ] ] ] ] ] ].
-  assert (Hxs0imp : is_called x s0 ->
-                    d = evaltree (rhs x) (getval s0) /\
-                    deps (rhs x) (getval s0) = rev vlist /\
-                    (forall p,
-                       In p vlist -> In x (get_infl s0 (fst p))) /\
-                    Inv_corr_var s0 x).
-  { intros Hcalxs0.
-    assert (Hcalxs : is_called x s)
-      by (clear - Hcalxs0 I1ss0; simpl in *; fsetdec).
-    assert (Htmp : ∀ p : Var.t * D.t, In p [] → In x (get_infl s (fst p))) by firstorder.
-    assert (H0 := H Hcalxs (valid_nil _) Htmp Hcalxs0); clear H Htmp; rename H0 into H.
-    split; [| split; [| split ] ]; try easy.
-    * now eapply valid_legal_subtree_Ans; eauto; intuition.
-    * symmetry.
-      now eapply valid_legal_subtree_Ans; eauto; intuition. }
-  split; [| split; [| split; [| split; [| split; [| split; [| split; [| split; [| split] ] ] ] ] ] ] ]; auto.
-  + intros mu Hmon Hsol Hlemu.
-    split; auto.
-    intros Hcalxs0.
-    assert (Hd : d = evaltree (rhs x) (getval s0)) by intuition.
-    rewrite Hd.
-    now apply D.LeqTrans with (y:=[[rhs x]]* mu); auto.
-
-(* Inv_Solve 0 *)
-- idtac. red. now intuition; auto.
-
-(* Inv_Solve 1 *)
-- idtac. intros x d s s0 vlist.
-  destruct_pose_state s.
-  destruct_pose_state s0.
-  intros Hnstabx s' Hevalrhs Ievalrhs Hncalxs0.
-  red. intros I0s Icorrs.
-  assert (Hcalxs' : is_called x s') by (simpl; now fsetdec).
-  assert (I0s' : Inv_0 s')
-    by (clear - I0s; simpl in *; split; now fsetdec).
-  assert (Icorrs' : Inv_corr s')
-    by (now apply Inv_corr_prepare).
-  assert (H := Ievalrhs Hcalxs' I0s' Icorrs'); clear Ievalrhs.
-  destruct H as [I0s0 [I1s0 [Icorrs0 [Isigs' [Isiginfls' H] ] ] ] ].
-   split; [| split; [| split; [| split; [| split; [| split; [| split] ] ] ] ] ]; auto; try easy.
-  + clear - I1s0 Hncalxs0. simpl in *. intuition; now fsetdec.
-  + intros _.
-    clear - I1s0 Hncalxs0. simpl in *. now fsetdec.
-  + destruct H as [_ [_ [_ [_ H] ] ] ].
-    now firstorder.
-
-(* Inv_Solve 2 *)
-- idtac. intros x d s s0 vlist.
-  destruct_pose_state s.
-  destruct_pose_state s0.
-  intros Hnstabx s' Hevalrhs Ievalrhs Hcalxs0.
-  intros cur new s1 Hleq.
-  assert (Egets' : getval s' = getval s) by auto.
-  assert (Egets1 : getval s1 = getval s0) by auto.
-  red. intros I0s Icorrs.
-  assert (Hcalxs' : is_called x s') by (simpl; now fsetdec).
-  assert (I0s' : Inv_0 s')
-    by (clear - I0s; simpl in *; split; now fsetdec).
-  assert (Icorrs' : Inv_corr s')
-    by (now apply Inv_corr_prepare).
-  assert (H := Ievalrhs Hcalxs' I0s' Icorrs'); clear Ievalrhs.
-  destruct H as [I0s0 [I1s0 [Icorrs0 [Isigs' [Isiginfls' H] ] ] ] ].
-  split; [| split; [| split; [| split; [| split; [| split; [| split] ] ] ] ] ].
-  + clear - I0s0. simpl in *. split; now fsetdec.
-  + clear - I1s0. simpl in *. intuition; now fsetdec.
-  + red. now rewrite <- Egets'; rewrite Egets1.
-  + apply Inv_sigma_infl_lemma2.
-    apply (Inv_sigma_infl_trans (s2 := s')); auto.
-    * clear - I1s0. simpl in *. now fsetdec.
-    * now unfold s'.
-    * now unfold s'.
-  + apply Inv_corr_called; auto; [intuition |].
-    destruct H as [_ [_ [_ [H _] ] ] ].
-    destruct H as [H _]; auto.
-    rewrite <- H. fold cur.
-    apply (D.LeqTrans (y:=new)); auto.
-    now apply D.JoinUnique.
-  + now intuition.
-  + intros _. clear - I1s0 I0s. simpl in *. now fsetdec.
-  + rewrite Egets1.
-    rewrite Egets' in H.
-    destruct H as [_ [_ [_ [_ H] ] ] ].
-    now firstorder.
-
-(* Inv_Solve 3 *)
-- idtac. intros x d s s0 s1 s2 vlist work.
-  destruct_pose_state s.
-  destruct_pose_state s0.
-  destruct_pose_state s1.
-  destruct_pose_state s2.
-  intros Hnstabx s' Hevalrhs Ievalrhs Hcalxs0.
-  intros cur new s0' Hleq s0'' Hhand Hsolveall Isolveall.
-  intros I0s Icorrs.
-  assert (Egets' : getval s' = getval s) by auto.
-  assert (Hcalxs' : is_called x s') by (simpl; now fsetdec).
-  assert (I0s' : Inv_0 s')
-    by (clear - I0s; simpl in *; split; now fsetdec).
-  assert (Icorrs' : Inv_corr s')
-    by (now apply Inv_corr_prepare).
-  assert (H := Ievalrhs Hcalxs' I0s' Icorrs'); clear Ievalrhs.
-  destruct H as [I0s0 [I1s0 [Icorrs0 [Isigs' [Isiginfls' H] ] ] ] ].
-  assert (I0s0' : Inv_0 s0')
-    by (clear - I0s0; simpl in *; now intuition).
-  assert (I0s1 : Inv_0 s1).
-  { assert (Hwork := extract_work_spec Hhand).
-    destruct Hwork as [_ [_ Hwork] ].
-    clear - I0s0' Hwork. simpl in *. split; now fsetdec. }
-  assert (Icorrs1 : Inv_corr s1).
-  { apply (Inv_corr_step2 (s:=s0) Hhand); auto.
-    - now intuition.
-    - apply Inv_corr_lemma4; auto.
-      + now intuition.
-      + clear - I1s0; simpl in *; now fsetdec. }
-  assert (Hwspec := extract_work_spec Hhand).
-  assert (Hworkncal : forall z, In z work → ~ is_called z s1).
-  { intros z Hz. clear - Hwspec Hz.
-    apply inlist_oflist in Hz.
-    simpl in *; now fsetdec. }
-  assert (H0 := Isolveall I0s1 Icorrs1 Hworkncal); clear Isolveall.
-  destruct H0 as [I0s2 [I1s2 [Isigs2 [Isiginfls2 [Icorrs2 H0] ] ] ] ].
-  assert (Isigss0 : Inv_sigma s s0) by auto.
-  assert (Isigs0s1 : Inv_sigma s0 s1).
-  { eapply Inv_sigma_extract_work; [| now refine Hhand]; clear Hhand.
-    intros z. case (eq_dec x z) as [e | n].
-    - subst z. unfold s0''. rewrite setval_getval_corr.
-      now apply D.JoinUnique.
-    - simpl. now rewrite add_neq_o. }
-  assert (Isigss1 : Inv_sigma s s1)
-    by (eapply Inv_sigma_trans; eauto).
-  assert (Isigss2 : Inv_sigma s s2)
-    by (eapply Inv_sigma_trans; eauto).
-  assert (Hsols2 : VS.Subset (get_solved s1) (get_solved s2))
-    by (clear - I1s2 H0; simpl in *; now fsetdec).
-  assert (Einfls : forall z, get_infl s' z = get_infl s z) by auto.
-  assert (Einfls1 : forall z, x <> z -> get_infl s1 z = get_infl s0 z).
-  { intros z ne. clear - ne Hwspec.
-    destruct Hwspec as [_ [_ [H _] ] ].
-    simpl in *. rewrite H. now rewrite remove_neq_o. }
-  assert (Hvals' : forall z, getval s' z = getval s z) by auto.
-  assert (Evals1 : forall z, x <> z -> getval s1 z = getval s0 z).
-  { clear - Hwspec. intros z ne.
-    destruct Hwspec as [_ [H _ ] ].
-    simpl in *; subst. now rewrite add_neq_o. }
-  assert (Hvals1 : getval s1 x = D.join cur d).
-  { clear - Hwspec.
-    destruct Hwspec as [_ [H _ ] ].
-    simpl in *; subst. now rewrite add_eq_o. }
-  assert (Hwork : work = get_infl s0 x)
-    by (now inversion Hhand).
-  assert (I1ss2 : Inv_1 s s2).
-  { clear - I1s2 I1s0 Hwspec H0.
-    destruct H0 as [H01 [H02 [H03 _] ] ].
-    destruct Hwspec as [_ [_ [_ H] ] ].
-    simpl in *. now intuition; fsetdec. }
-  assert (Isiginflss2 : Inv_sigma_infl s s2).
-  { intros z. split.
-    - intros Hleqs1s.
-      assert (Evalz2 : getval s2 z  = getval s z)
-        by (apply D.LeqAntisym; auto; eapply D.LeqTrans; eauto).
-      assert (Evalz1 : getval s1 z = getval s z)
-        by (apply D.LeqAntisym; [rewrite <- Evalz2 |]; now firstorder).
-      assert (Evalz12 : getval s1 z = getval s2 z)
-        by (rewrite Evalz1, Evalz2; auto).
-      assert (Evalz0 : getval s0 z = getval s z).
-      { apply D.LeqAntisym; auto.
-        apply D.LeqTrans with (y:=getval s1 z); auto.
-        now rewrite Evalz1. }
-      assert (ne : x <> z).
-      { contradict Hleq. subst z.
-        unfold new. rewrite <- Hvals1, Evalz1, <- Hvals'.
-        now firstorder. }
-      destruct (Isiginfls' z) as [Htmp1 _].
-      rewrite Hvals', Evalz0, Einfls, <- Einfls1 in Htmp1; auto.
-      apply incl_tran with (m:=get_infl s1 z); auto.
-      clear Htmp1.
-      destruct (Isiginfls2 z) as [Htmp2 _].
-      now rewrite Evalz12 in Htmp2; auto.
-    - intros Hnleqs1s.
-      red in Isiginfls'.
-      case (D.eq_dec (getval s z) (getval s0 z)) as [e0 | n0].
-      + destruct (Isiginfls' z) as [Htmp1 _].
-        rewrite Einfls, Hvals' in Htmp1.
-        assert (Hleqs0s : D.Leq (getval s0 z) (getval s z))
-          by (rewrite <- e0; auto).
-        intros u Hu.
-        assert (Hinflz0 : In u (get_infl s0 z)) by intuition.
-        case (eq_dec x z) as [e | n].
-        * subst z.
-          assert (Huwork : VS.In u (of_list work))
-            by (apply inlist_oflist; rewrite Hwork; now intuition).
-          clear - Huwork H0; simpl in *; now fsetdec.
-        * rewrite <- Einfls1 in Hinflz0; auto.
-          rewrite <- Evals1 in Hleqs0s; auto.
-          red in Isiginfls2.
-          assert (Hnleqs2s1 : ~ D.Leq (getval s2 z) (getval s1 z))
-            by (contradict Hnleqs1s; now rewrite e0, <- Evals1).
-          destruct (Isiginfls2 z) as [_ Htmp2].
-          now intuition.
-      + assert (Hnleqs0s : ~ D.Leq (getval s0 z) (getval s z))
-          by (contradict n0; now apply D.LeqAntisym).
-        destruct (Isiginfls' z) as [_ Htmp2].
-        rewrite Hvals', Einfls in Htmp2.
-        intros u Hu.
-        assert (Hsolus0 : is_solved u s0) by auto.
-        clear - Hwspec H0 Hsolus0.
-        destruct Hwspec as [_ [_ [_ H] ] ].
-        simpl in *. now fsetdec. }
-  split; [| split; [| split; [| split; [| split; [| split; [| split] ] ] ] ] ]; auto.
-  + now intuition.
-  + intros _.
-    destruct Hwspec as [_ [_ [_ Htmp] ] ].
-    clear - Htmp H0 I1s0 I1s2.
-    destruct H0 as [H01 [H02 [H03 _] ] ].
-    simpl in *. now intuition; fsetdec.
-  + intros mu Hmon Hsolmu Hlemu.
-    cut (leqF (getval s1) mu); [now intuition |].
-    intros z.
-    destruct H as [_ [_ [_ [_ H] ] ] ].
-    destruct (Var.eq_dec z x) as [e | n].
-    * subst z.
-      rewrite Hvals1.
-      apply D.JoinUnique.
-      split; [ unfold cur; now eapply H | now eapply H].
-    * rewrite Evals1; auto.
-      now eapply H.
-
-(* Inv_SolveAll_0 *)
-- idtac. intros s I0s Icorrs _.
-  now intuition; auto; firstorder.
-
-(* Inv_SolveAll_1 *)
-- idtac. intros x w s s0 s1.
-  destruct_pose_state s.
-  destruct_pose_state s0.
-  destruct_pose_state s1.
-  intros Hsolve Isolve Hsolveall Isolveall.
-  red. intros I0s Icorrs Hs.
-  assert (H := Isolve I0s Icorrs); clear Isolve.
-  destruct H as [I0s0 [I1s0 [Isigs0 [Isiginfls0 [Icorrs0 [Hsta0 [Hnsta0 Hmons] ] ] ] ] ] ].
-  assert (Hxwset : forall u, VS.In u (of_list (x :: w)) -> ~ is_called u s).
-  { clear - Hs. intros u.
-    assert (Htmp :=proj2 (@inlist_oflist u (x :: w))).
-    now firstorder. }
-  assert (Hws0 : forall z, In z w → ~ is_called z s0)
-    by (clear - Hs I1s0; firstorder).
-  assert (H := Isolveall I0s0 Icorrs0 Hws0); clear Isolveall.
-  destruct H as [I0s1 [I1s1 [Isigs1 [Isiginfls1 [Icorrs1 [Hsta1 [Hque1 [Hsol1 Hmons0] ] ] ] ] ] ] ].
-  assert (Hsol : VS.Subset (get_solved s0) (get_solved s1))
-    by (clear - I1s1; simpl in *; now fsetdec).
-  assert (Hxwsta1 : forall u, In u (x :: w) \/ is_stable u s -> is_stable u s1).
-  { intros u Hu. destruct Hu as [ [e | Hinu] | Hstabu].
-    - subst u.
-      case (is_stable_dec x s) as [i | n].
-      + intros. assert (e : s = s0) by auto. rewrite e in i.
-        clear - Hnsta0 I1s1 i. now simpl in *; fsetdec.
-      + intros. assert (Htmp : is_stable x s0) by intuition.
-        clear - Htmp I1s1. simpl in *; now fsetdec.
-    - apply inlist_oflist in Hinu. clear - Hinu Hsta1; now fsetdec.
-    - clear - I1s0 I1s1 Hstabu; simpl in *; now fsetdec. }
-  assert (Hxwsta1set : VS.Subset (VS.union (of_list (x :: w))
-                                           (get_stable s))
-                                 (get_stable s1)).
-  { clear - Hxwsta1. intros u Hu.
-    assert (Htmp := proj2 (@inlist_oflist u (x :: w))).
-    apply VS.union_spec in Hu.
-    simpl in *. now intuition. }
-  clear Hxwsta1.
-  rewrite oflist_cons. rewrite oflist_cons in Hxwsta1set.
-  split; [| split; [| split; [| split; [| split; [| split; [| split; [| split] ] ] ] ] ] ]; auto.
-  + now eapply Inv_1_trans; eauto.
-  + now eapply Inv_sigma_trans; eauto.
-  + now eapply Inv_sigma_infl_trans; eauto.
-  + clear - Hque1 I1s1 I1s0 Hxwsta1set I0s1.
-    simpl in *; now fsetdec.
-  + clear - Hxwset Hxwsta1set I1s0 I1s1.
-    intros u Hu.
-    rewrite VS.union_spec in Hu. case Hu as [Hu1 | Hu2].
-    * assert (Huncals : ~ is_called u s)
-        by (clear - Hu1 Hxwset; simpl in *; now firstorder).
-      clear - Hxwsta1set I1s0 I1s1 Hu1 Huncals; simpl in *; now fsetdec.
-    * clear - I1s0 I1s1 Hu2; simpl in *; now fsetdec.
-Qed.
-
-(*XXX*)
-
 Lemma Inv_0_init : Inv_0 s_init.
-Proof.
-simpl. split; now fsetdec.
-Qed.
+Proof. simpl; split; now fsetdec. Qed.
 
 Lemma Inv_corr_init : Inv_corr s_init.
 Proof.
@@ -2248,7 +1777,7 @@ assert (Htmp : forall x, In x w -> ~ is_called x s_init)
   by (simpl; intros; fsetdec).
 assert (H := Isolveall Inv_0_init Inv_corr_init Htmp).
 clear Htmp Isolveall.
-destruct H as [I0 [I1 [Isig [Isiginfl [Icorr [Hsta [Hsol Hque] ] ] ] ] ] ].
+destruct H as [I0 [I1 [Isig [Isiginfl [Icorr (*[Hsta*) [Hsol Hque] (*]*) ] ] ] ] ].
 split; [| split].
 - intros u Hu.
   assert (Htmp := proj1 (inlist_oflist u w)).
@@ -2269,8 +1798,7 @@ Qed.
 
 Lemma leqF_init mu : leqF (getval s_init) mu.
 Proof.
-intros x. simpl.
-now rewrite empty_o.
+intros x. simpl. now rewrite empty_o.
 Qed.
 Local Hint Resolve leqF_init.
 
