@@ -117,12 +117,12 @@ Defined.
 
 Definition Error : monadType.
 exists
-  (fun X => option X)
-  (fun X x => Some x)
+  (fun X => Exc X)
+  (fun X x => value x)
   (fun X Y t f => 
     match t with 
-      | None => None
-      | Some x => f x end).
+      | error => error
+      | value x => f x end).
 - unfold val_bind; intuition.
 - unfold bind_val. intros A t. now destruct t.
 - unfold bind_bind. intros A B C t f g.
@@ -131,12 +131,12 @@ Defined.
 
 Definition ErrorT (M : monadType) : monadType.
 exists
-  (fun X => M (option X))
-  (fun X x => tval _ (Some x))
+  (fun X => M (Exc X))
+  (fun X x => tval _ (value x))
   (fun X Y t f => t >>= fun t => 
     match t with
-      | None => tval _ None
-      | Some x => f x end). 
+      | error => tval _ error
+      | value x => f x end). 
 - unfold val_bind; intuition.
 - unfold bind_val. intros A t. apply unit_bind_match.
   intros a. now destruct a.
