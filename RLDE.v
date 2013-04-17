@@ -545,8 +545,7 @@ Definition simTrel
        d = d' /\ sim s1 s1'.
 
 Lemma sim_init : sim s_init SI.s_init.
-easy.
-Qed.
+Proof. easy. Qed.
 
 Ltac destruct_state s :=
   let sig := fresh "sigma" in
