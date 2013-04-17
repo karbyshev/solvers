@@ -620,6 +620,7 @@ Local Hint Resolve Inv_1_refl.
 
 Lemma Inv_1_trans s1 s2 s3 :
   Inv_1 s1 s2 -> Inv_1 s2 s3 -> Inv_1 s1 s3.
+Proof.
 destruct_state s1; destruct_state s2; destruct_state s3.
 simpl. intuition; now fsetdec.
 Qed.
@@ -633,9 +634,7 @@ Local Hint Resolve Inv_sigma_refl.
 
 Lemma Inv_sigma_trans s1 s2 s3 :
   Inv_sigma s1 s2 -> Inv_sigma s2 s3 -> Inv_sigma s1 s3.
-Proof.
-unfold Inv_sigma. intros. now eapply leqF_trans; eauto.
-Qed.
+Proof. intros; now eapply leqF_trans; eauto. Qed.
 
 Lemma Inv_sigma_prepare x s : Inv_sigma s (prepare x s).
 Proof. intro; now destruct_state s. Qed.
@@ -644,9 +643,7 @@ Local Hint Resolve Inv_sigma_prepare.
 Lemma Inv_sigma_lemma1 s1 s2 x y :
   Inv_sigma s1 s2 ->
   Inv_sigma s1 (add_infl y x s2).
-Proof.
-now destruct_state s1; destruct_state s2.
-Qed.
+Proof. now destruct_state s1; destruct_state s2. Qed.
 
 Lemma Inv_sigma_extract_work s1 s2 s3 x work:
   Inv_sigma s1 s2 ->
@@ -683,6 +680,7 @@ Definition Inv_corr_var (s : state') x :=
 
 Lemma Inv_corr_prepare s (x : Var.t) :
   Inv_corr s -> Inv_corr (prepare x s).
+Proof.
 destruct_pose_state s.
 set (s1 := prepare x s).
 intros Hcorrs.
@@ -1034,6 +1032,7 @@ split.
 Qed.
 
 Lemma Inv_sigma_infl_prepare s x : Inv_sigma_infl s (prepare x s).
+Proof.
 destruct_pose_state s. set (s1 := prepare x s).
 red.
 assert (Hval : getval s1 = getval s) by auto.
@@ -1714,9 +1713,7 @@ Qed.
 (*XXX*)
 
 Lemma Inv_0_init : Inv_0 s_init.
-Proof.
-simpl. split; now fsetdec.
-Qed.
+Proof. simpl; split; now fsetdec. Qed.
 
 Lemma Inv_corr_init : Inv_corr s_init.
 Proof.
@@ -1763,8 +1760,7 @@ Qed.
 
 Lemma leqF_init mu : leqF (getval s_init) mu.
 Proof.
-intros x. simpl.
-now rewrite empty_o.
+intros x. simpl. now rewrite empty_o.
 Qed.
 Local Hint Resolve leqF_init.
 
