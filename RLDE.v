@@ -533,15 +533,6 @@ Definition simT
        d = d' /\ sim s1 s1'.
 
 (* lifted simulation relation *)
-(*Definition simTrel
-  (f : Var.t -> state -> D.t * state -> Prop)
-  (f' : Var.t -> state' -> D.t * state' -> Prop)
-  := forall x s s1 s' s1' d d',
-       sim s s' ->
-       f x s (d, s1) ->
-       f' x s'(d', s1') ->
-       d = d' /\ sim s1 s1'.*)
-
 Definition simTrel
   (f : Var.t -> state -> D.t * state -> Prop)
   (f' : Var.t -> state' -> D.t * state' -> Prop)
