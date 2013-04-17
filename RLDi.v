@@ -119,6 +119,7 @@ Definition is_stable x (s : state') :=
   let '(_, _, stable, _, _) := s in VS.In x stable.
 
 Lemma is_stable_dec x s : {is_stable x s} + {~ is_stable x s}.
+Proof.
 destruct_state s. simpl. now apply VSetProps.In_dec.
 Qed.
 
@@ -147,6 +148,7 @@ Definition is_called x (s : state') :=
   let '(_, _, _, called, _) := s in VS.In x called.
 
 Lemma is_called_dec x s : {is_called x s} + {~ is_called x s}.
+Proof.
 destruct_state s. simpl. now apply VSetProps.In_dec.
 Qed.
 
@@ -623,23 +625,20 @@ simpl. intuition; now fsetdec.
 Qed.
 
 Definition Inv_sigma (s s' : state') :=
-  forall z : Var.t, D.Leq (getval s z) (getval s' z).
+  leqF (getval s) (getval s').
 
 Lemma Inv_sigma_refl (s : state') : Inv_sigma s s.
-Proof.
-destruct_state s; now firstorder.
-Qed.
+Proof. destruct_state s; now firstorder. Qed.
 Local Hint Resolve Inv_sigma_refl.
 
 Lemma Inv_sigma_trans s1 s2 s3 :
   Inv_sigma s1 s2 -> Inv_sigma s2 s3 -> Inv_sigma s1 s3.
 Proof.
-unfold Inv_sigma. intros. now eapply D.LeqTrans; eauto.
+unfold Inv_sigma. intros. now eapply leqF_trans; eauto.
 Qed.
 
 Lemma Inv_sigma_prepare x s : Inv_sigma s (prepare x s).
-red. now destruct_state s.
-Qed.
+Proof. intro; now destruct_state s. Qed.
 Local Hint Resolve Inv_sigma_prepare.
 
 Lemma Inv_sigma_lemma1 s1 s2 x y :

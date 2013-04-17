@@ -38,6 +38,7 @@ intros f g H H0.
 extensionality x.
 now apply D.LeqAntisym.
 Qed.
+Hint Resolve leqF_antisym.
 
 Definition leqF_trans : transitive _ leqF.
 Proof.
@@ -45,6 +46,7 @@ intros f g h H1 H2 x.
 eapply D.LeqTrans; [eapply H1 |]; auto.
 Qed.
 End LeqFun.
+Hint Resolve leqF_trans.
 
 Definition has_uniq_lookup {X} (rhs : X -> Tree Var.t D.t D.t) :=
   forall x, uniq_lookup (rhs x).
