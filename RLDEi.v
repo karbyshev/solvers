@@ -365,7 +365,6 @@ with Solve :
       let new_val := D.join cur_val d in
       let s4 := setval x new_val s3 in
       (work, s5) = extract_work x s4 ->
-      (*ExtractWork x work s4 s5 ->*)
       SolveAll work s5 s6 ->
       Solve x s s6
 
