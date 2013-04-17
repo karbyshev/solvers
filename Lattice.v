@@ -178,7 +178,7 @@ Module UtilJoin (Import D : JoinSemiLattice).
     now apply FlipJoinIsJoin.
   Qed.
 
-  Lemma joinSubsume x y : D.Leq x y <-> D.join x y = y.
+  Lemma joinSubsume1 x y : D.Leq x y <-> D.join x y = y.
   Proof.
     split.
     - intros H.
@@ -189,24 +189,32 @@ Module UtilJoin (Import D : JoinSemiLattice).
       now apply (D.JoinUnique x y).
   Qed.
 
-  Lemma joinSubsumeR x y : D.Leq y x <-> D.join x y = x.
-  Proof.
-    rewrite joinSym.
-    now apply joinSubsume.
-  Qed.
+  Lemma joinSubsume2 x y : D.Leq y x <-> D.join x y = x.
+  Proof. rewrite joinSym; now apply joinSubsume1. Qed.
 
-  Lemma LeqJoin x y : y ⊑ x ⊔ y.
-  Proof.
-    now apply D.JoinUnique.
-  Qed.
-  Hint Resolve LeqJoin.
+  Lemma LeqJoin1 x y : D.Leq x (D.join x y).
+  Proof. now apply D.JoinUnique. Qed.
+  Hint Resolve LeqJoin1.
 
-  Lemma leq_x_joinyz x y z : D.Leq x y -> D.Leq x (D.join y z).
+  Lemma LeqJoin2 x y : D.Leq x (D.join y x).
+  Proof. now apply D.JoinUnique. Qed.
+  Hint Resolve LeqJoin2.
+
+  Lemma LeqLeqJoin1 x y z : D.Leq x y -> D.Leq x (D.join y z).
   Proof.
     intros xLEy.
     destruct (D.JoinUnique y z) as [H _]. 
-    apply (D.LeqTrans (y:=y)); now firstorder.
+    now apply (D.LeqTrans (y:=y)).
   Qed.
+  Hint Resolve LeqLeqJoin1.
+
+  Lemma LeqLeqJoin2 x y z : D.Leq x y -> D.Leq x (D.join z y).
+  Proof.
+    intros xLEy.
+    destruct (D.JoinUnique y z) as [H _].
+    now apply (D.LeqTrans (y:=y)).
+  Qed.
+  Hint Resolve LeqLeqJoin2.
 
   Lemma LeqBotElim a : D.Leq a D.bot -> a = D.bot.
   Proof.
