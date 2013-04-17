@@ -179,16 +179,15 @@ Variable Hpure : forall x, is_pure (F x).
 Definition rhs x : Tree Var.t D.t D.t := proj1_sig (Hpure x).
 
 Lemma rhs_spec x : F x = [[rhs x]].
-now rewrite (proj2_sig (Hpure x)).
-Qed.
+Proof. now rewrite (proj2_sig (Hpure x)). Qed.
 
 Inductive EvalGet :
   Var.t -> Var.t -> state -> D.t * state -> Prop :=
   | EvalGet0 :
-      forall x y s s0 s1 d,
+      forall x y s s0,
         Solve y s s0 ->
-        s1 = add_infl y x s0 ->
-        d = getval s0 y ->
+        let s1 := add_infl y x s0 in
+        let d := getval s0 y in
         EvalGet x y s (d, s1)
 
 with EvalGet_x :
@@ -312,12 +311,13 @@ Proof.
 apply solve_mut_min.
 
 (* EvalGet *)
-- idtac. intros x y s s0 s1 d Hsol Isol Es1 Ed.
+- idtac. intros x y s s0 Hsol Isol s1 d.
   red. red in Isol.
   intros [d' s1'] Heval'.
   subst.
-  inversion Heval' as [? ? ? ? ? ? Hsol']; subst; clear Heval'.
-  assert (Htmp := Isol _ Hsol'); now subst.
+  inversion Heval' as [? ? ? ? Hsol']; subst; clear Heval'.
+  assert (Htmp := Isol _ Hsol').
+  unfold d, s1. now subst.
 
 (* EvalGet_x *)
 - idtac. intros x f Heval Ieval.
@@ -467,16 +467,16 @@ Definition simT
        d = d' /\ sim s1 s1'.
 
 (* lifted simulation relation *)
-Definition simTrel
+(*Definition simTrel
   (f : Var.t -> state -> D.t * state -> Prop)
   (f' : Var.t -> state' -> D.t * state' -> Prop)
   := forall x s s1 s' s1' d d',
        sim s s' ->
        f x s (d, s1) ->
        f' x s'(d', s1') ->
-       d = d' /\ sim s1 s1'.
+       d = d' /\ sim s1 s1'.*)
 
-Definition simTrel2
+Definition simTrel
   (f : Var.t -> state -> D.t * state -> Prop)
   (f' : Var.t -> state' -> D.t * state' -> Prop)
   := forall x s s1 s' d,
@@ -621,12 +621,12 @@ Definition EvalGet_sim x y s ds1
 
 Definition EvalGet_x_sim (x : Var.t)
                          (f : Var.t -> state -> D.t * state -> Prop)
-  := exists f', SI.EvalGet_x Hpure x f' /\ simTrel2 f f'.
+  := exists f', SI.EvalGet_x Hpure x f' /\ simTrel f f'.
 
 Definition Wrap_Eval_x_sim x f t s ds1
   := forall f' s' l',
        sim s s' ->
-       simTrel2 f f' ->
+       simTrel f f' ->
        SI.EvalGet_x Hpure x f' ->
        exists ds1' l1',
          let '(d,s1) := ds1 in
@@ -678,7 +678,7 @@ apply solve_mut_min.
 
 (* EvalGet *)
 - idtac.
-  intros x y s s0 s1 d Hsol Hsolsim Es1 Ed.
+  intros x y s s0 Hsol Hsolsim s1 d.
   red. intros s' Hsims.
   red in Hsolsim.
   elim (Hsolsim _ Hsims); intros s0' [Hsol' Hsims0].
@@ -1391,7 +1391,7 @@ Proof.
 apply solve_mut_min.
 
 (* EvalGet *)
-- idtac. intros x y s s0 s1 d _ Isol Es1 Ed.
+- idtac. intros x y s s0 _ Isol s1 d.
   subst s1.
   now apply eq_precEq_state with (s2:=s0); auto.
 
