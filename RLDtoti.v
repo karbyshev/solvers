@@ -334,7 +334,7 @@ with solve_all (n : nat) w s : Error state' :=
     | 0 => error
     | S k =>
         match w with
-          | [] => Some s
+          | [] => return _ s
           (*| [x] => solve k x s*)
           | x :: l => (solve k x s) >>= solve_all k l
         end
