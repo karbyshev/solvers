@@ -1300,7 +1300,7 @@ apply solve_mut_ind.
   rewrite Hval.
   unfold Inv_Solve in Hinv.
   destruct Hinv as [I0 [I1 [Isig [Isiginfl [Icor (*[Hstaby*) [Hnstaby Hmon] (*]*) ] ] ] ] ]; auto.
-  split; [| split; [| split; [| split; [| split; [| split; [| split] ] ] ] ] ]; auto.
+  split; [| split; [| split; [| split; [| split; [| split; [| split; [| split ] ] ] ] ] ] ]; auto.
   + clear - Hnstaby I1.
     case (is_stable_dec y s) as [i | n];
       simpl in *; now intuition; fsetdec.
