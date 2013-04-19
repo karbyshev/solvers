@@ -1243,7 +1243,8 @@ Definition Inv_SolveAll
 Lemma VDeq_dec (px py : Var.t * D.t) : {px = py} + {~ px = py}.
 Proof.
 destruct px as [x a]; destruct py as [y b].
-now case (eq_dec x y); [case (D.eq_dec a b); [left | right] | right]; congruence.
+now case (eq_dec x y);
+  [case (D.eq_dec a b); [left | right] | right]; congruence.
 Qed.
 
 Lemma InvariantsLemma :
