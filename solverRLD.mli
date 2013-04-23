@@ -304,6 +304,12 @@ module type JoinSemiLattice =
   val bot : t
  end
 
+module UtilJoin : 
+ functor (D:JoinSemiLattice) ->
+ sig 
+  
+ end
+
 type monadType = { tval : (__ -> __ -> __);
                    tbind : (__ -> __ -> __ -> (__ -> __) -> __) }
 
@@ -428,6 +434,11 @@ module SolverRLDtotal :
     val join : t -> t -> t
     
     val bot : t
+   end
+  
+  module UtilD : 
+   sig 
+    
    end
   
   module VSetFacts : 

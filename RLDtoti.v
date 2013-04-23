@@ -16,6 +16,8 @@ Module SolverRLDtotalI (Sys : CSysJoinSemiLat)
 Module Var := Sys.V.
 Module D   := Sys.D.
 
+Module Import UtilD := UtilJoin (D).
+
 Module Import VSetFacts := WFactsOn (Var) (VSet).
 Module Import VSetProps := WPropertiesOn (Var) (VSet).
 Module Import VSetDecide := WDecideOn (Var) (VSet).
@@ -26,7 +28,6 @@ Module Sigma := VMap.
 Module Infl := VMap.
 
 Module Import Defs := Solvers.Defs (Sys).
-Module Import UtilD := UtilJoin (D).
 
 (*****************************************************************)
 (************* Instrumented algorithm specification **************)
@@ -320,10 +321,10 @@ Fixpoint solve (n : nat) (x : Var.t) (s : state') : Error state' :=
           let '(d, (s1, vlist)) := p in
           let s3 := rem_called x s1 in
           let cur := getval s1 x in
-            if D.leq d cur then
+          let new := D.join cur d in
+            if D.leq new cur then
               return _ s3
             else
-              let new := D.join cur d in
               let s4 := setval x new s3 in
               let (w,s5) := extract_work x s4 in
                 solve_all k w s5
@@ -429,20 +430,21 @@ with Solve :
         ~ is_stable x s ->
         let s1 := prepare x s in
         Eval_rhs m x s1 (value (d, (s2, ps))) ->
-        let cur_val := getval s2 x in
+        let cur := getval s2 x in
+        let new := D.join cur d in
         let s3 := rem_called x s2 in
-        D.Leq d cur_val ->
+        D.Leq new cur ->
         Solve (S m) x s (value s3)
   | Solve4 :
       forall m x d s s2 s5 os6 ps work,
         ~ is_stable x s ->
         let s1 := prepare x s in
         Eval_rhs m x s1 (value (d, (s2,ps))) ->
-        let cur_val := getval s2 x in
+        let cur := getval s2 x in
+        let new := D.join cur d in
         let s3 := rem_called x s2 in
-        ~ D.Leq d cur_val ->
-        let new_val := D.join cur_val d in
-        let s4 := setval x new_val s3 in
+        ~ D.Leq new cur ->        
+        let s4 := setval x new s3 in
         (work, s5) = extract_work x s4 ->
         SolveAll m work s5 os6 ->
         Solve (S m) x s os6
@@ -501,11 +503,11 @@ Lemma solve_step n x s :
     do p <- F x (instr (evalget n x)) (s0,[]);
     let '(d, (s1, ps)) := p in
     let cur := getval s1 x in
+    let new := D.join cur d in
     let s3 := rem_called x s1 in
-      if D.leq d cur then
+      if D.leq new cur then
         return _ s3
       else
-        let new := D.join cur d in
         let s4 := setval x new s3 in
         let (w,s5) := extract_work x s4 in
           solve_all n w s5.
@@ -562,15 +564,15 @@ split; [| split; [| split; [| split; [| split ] ] ] ]; auto;
     set (cur := getval s1 x).
     set (new := D.join cur d1).
     case (D.eq_dec new cur) as [e | ne].
-    * assert (Hle : D.Leq d1 cur) by now rewrite <- e; subst.
-      assert (Ele : D.leq d1 cur = true)
+    * assert (Hle : D.Leq new cur) by now rewrite <- e.
+      assert (Ele : D.leq new cur = true)
         by now apply D.leqProper.
-      simpl. rewrite EF. fold cur. rewrite Ele.
+      simpl. rewrite EF. fold cur new. rewrite Ele.
       now intros; subst; eauto.
-    * assert (Hnle : ~ D.Leq d1 cur).
-      { contradict ne. unfold new. now apply UtilD.joinSubsume2. }
-      assert (Enle : D.leq d1 cur = false).
-      { case_eq (D.leq d1 cur); auto.
+    * assert (Hnle : ~ D.Leq new cur).
+      { contradict ne. apply D.LeqAntisym; auto. now unfold new. }
+      assert (Enle : D.leq new cur = false).
+      { case_eq (D.leq new cur); auto.
         intros Ele. now apply D.leqProper in Ele. }
       simpl. rewrite EF. fold cur new. rewrite Enle.
       set (s2 := rem_called x s1).
@@ -1451,7 +1453,7 @@ apply solve_mut_ind.
   destruct_pose_state s.
   destruct_pose_state s0.
   intros Hnstabx s' Hevalrhs Ievalrhs.
-  intros cur s1 Hleq.
+  intros cur new s1 Hleq.
   assert (Egets' : getval s' = getval s) by auto.
   assert (Egets1 : getval s1 = getval s0) by auto.
   red. intros s0' es0'; inversion es0'; subst s0'; clear es0'.
@@ -1478,7 +1480,9 @@ apply solve_mut_ind.
     * apply Inv_corr_called; auto; [intuition |].
       destruct H as (*[_*) [_ [_ [H _] ] ] (*]*).
       destruct H as [H _]; auto.
-      now rewrite <- H; fold cur.
+      rewrite <- H.
+      apply D.LeqTrans with (y:=new); auto.
+      now unfold new.
     * now apply Inv_corr_notcalled.
   (*+ now intuition.*)
   + intros _. clear - I1s0 I0s. simpl in *. now fsetdec.
@@ -1495,7 +1499,7 @@ apply solve_mut_ind.
   destruct os2 as [s2 |]; [| now intuition].
   destruct_pose_state s2.
   intros Hnstabx s' Hevalrhs Ievalrhs.
-  intros cur s0' Hleq new s0'' Hhand Hsolveall Isolveall.
+  intros cur new s0' Hleq s0'' Hhand Hsolveall Isolveall.
   red. intros s2' es2'; inversion es2'; subst s2'; clear es2'.
   intros I0s Icorrs.
   assert (Egets' : getval s' = getval s) by auto.
@@ -1600,8 +1604,7 @@ apply solve_mut_ind.
       assert (Evalz0' : getval s0' z = getval s0 z) by auto.
       assert (ne : x <> z).
       { contradict Hleq. subst z.
-        unfold cur. rewrite Evalz0, <- Evalz1, Hvals1.
-        now apply D.JoinUnique. }
+        unfold cur. now rewrite Evalz0, <- Evalz1, Hvals1. }
       destruct (Isiginfls' z) as [Htmp1 _].
       rewrite Hvals', Evalz0, Einfls, <- Einfls1 in Htmp1; auto.
       apply incl_tran with (m:=get_infl s1 z); auto.

@@ -26,6 +26,7 @@ Module Sigma := VMap.
 Module Infl := VMap.
 
 Module Import Defs := Solvers.Defs (Sys).
+Module Import UtilD := UtilJoin (D).
 
 (*****************************************************************)
 (************* Instrumented algorithm specification **************)
@@ -343,8 +344,9 @@ with Solve :
       let s1 := prepare x s in
       Eval_rhs x s1 (d, (s2, ps)) ->
       let s3 := rem_called x s2 in
-      let cur_val := getval s3 x in
-      D.Leq d cur_val ->
+      let cur := getval s3 x in
+      let new := D.join cur d in
+      D.Leq new cur ->
       Solve x s s3
   | Solve2 :
       forall x d s s2 s5 s6 ps work,
@@ -352,10 +354,10 @@ with Solve :
       let s1 := prepare x s in
       Eval_rhs x s1 (d, (s2, ps)) ->
       let s3 := rem_called x s2 in
-      let cur_val := getval s3 x in
-      ~ D.Leq d cur_val ->
-      let new_val := D.join cur_val d in
-      let s4 := setval x new_val s3 in
+      let cur := getval s3 x in
+      let new := D.join cur d in
+      ~ D.Leq new cur ->
+      let s4 := setval x new s3 in
       (work, s5) = extract_work x s4 ->
       (*ExtractWork x work s4 s5 ->*)
       SolveAll work s5 s6 ->
@@ -501,49 +503,56 @@ apply solve_mut_ind.
 
 (* Solve 1 *)
 - idtac.
-  intros x d1 s s1 l2 Hnstaxs s0 Heval Ieval s2 cur Hleq.
+  intros x d1 s s1 l2 Hnstaxs s0 Heval Ieval s2 cur new Hleq.
   red. intros s2' Hsol'.
   red in Ieval.
-  inversion Hsol' as [| ? ? ? ? ? ? s1' Heval' |];
-    [subst s2'; easy |  |].
-  + unfold s1' in Heval'.
+  inversion Hsol' as [| ? ? ? ? ? ? s0' Heval' | ? ? ? ? ? ? ? ? ?  s0' Heval' ].
+  + now subst s2'.
+  + unfold s0' in Heval'.
     assert (Htmp := Ieval _ Heval').
     unfold s2, s6.
     now inversion Htmp.
   + subst s3 s6.
-    assert (Htmp := Ieval _ H0).
+    assert (Htmp := Ieval _ Heval').
     inversion Htmp.
-    unfold cur_val0 in H1.
-    unfold cur in Hleq.
-    unfold s10 in H1.
-    now rewrite <- H6, <- H7 in H1.
+    unfold new0,cur0,cur1 in H0.
+    unfold new,cur in Hleq.
+    subst d1.
+    unfold s9,s7 in H0.
+    now rewrite H3, <- H6 in H0.
 
 (* Solve 2 *)
 - idtac.
   intros x d1 s s1 s4 s5 l w.
   intros Hnstaxs s0 Heval Ieval.
-  intros s2 cur Hnleq new s3 Hwork Hsolall Isolall.
+  intros s2 cur new Hnleq s3 Hwork Hsolall Isolall.
   red. intros s5' Hsol'.
-  inversion Hsol' as [| ? ? ? ? ? ? s0' Heval' |];
-    [subst s5'; easy | |].
-  + unfold cur in Hnleq.
-    unfold cur_val in H0.
-    red in Ieval.
+  inversion Hsol' as [| ? ? ? ? ? ? s0' Heval' | ? ? ? ? ? ? ? ? ? s0' Heval' ].
+  + now subst s5'.
+  + unfold s0' in Heval'.
     assert (Htmp := Ieval _ Heval').
-    inversion Htmp; subst s5' d; clear Htmp.
-    unfold s9 in H0. now rewrite <- H6 in H0.
-  + clear H Hnstaxs.
-    assert (Htmp := Ieval _ H0); clear Heval Ieval.
+    subst s5' s6.
     inversion Htmp; clear Htmp.
-    unfold new, cur in s3.
-    unfold new_val, cur_val in s12.
-    unfold s3 in Hwork.
-    unfold s12, s11 in H2.
-    rewrite <- H8, H4 in H2.
+    unfold new, cur in Hnleq.
+    unfold new0, cur0, cur1 in H0.
+    subst d.
+    unfold s8,s9 in H0.
+    now rewrite H1, <- H4 in H0.
+  + clear H Hnstaxs.
+    assert (Htmp := Ieval _ Heval'); clear Heval Ieval.
+    subst s5' s6.
+    inversion Htmp; clear Htmp.
+    unfold new, cur in Hnleq.
+    unfold new0, cur0, cur1 in H0.
+    unfold s12, s10 in H0.
+    rewrite H3, <- H5 in H0.
     assert (Hw : (w,s4) = (work,s8)).
-    { rewrite Hwork, H2, H7.
-      unfold s13, s2. now rewrite H8. }
-    inversion Hw; subst s8 work.
+    { rewrite Hwork, H1.
+      subst s12 s11 s10.
+      unfold s3, new, cur.
+      unfold new0, cur0.
+      now rewrite H3, H4, <- H5. }
+    inversion Hw; subst s8 work; clear Hw.
     now eapply Isolall; eauto.
 
 (* SolveAll 0 *)
@@ -945,13 +954,11 @@ split.
       now rewrite H4; auto. }
     rewrite Heval, Hvalx.
     case (is_called_dec x s) as [Hcalx | Hncalx].
-    * rewrite <- H; auto. hnf.
-      now apply D.JoinUnique.
+    * now rewrite <- H.
     * assert (Hsolx : is_solved x s)
         by (clear - Hncalx Hstazs; simpl in *; fsetdec).
       hnf.
-      apply D.LeqTrans with (y:=getval s x);
-        [now firstorder | now apply D.JoinUnique].
+      now apply D.LeqTrans with (y:=getval s x); auto.
   + assert (H10 : ~ In z work).
     { cut (~ VS.In z (of_list work));
         [assert (Htmp := inlist_oflist); clear - Htmp; now firstorder |].
@@ -1447,7 +1454,7 @@ apply solve_mut_ind.
   destruct_pose_state s.
   destruct_pose_state s0.
   intros Hnstabx s' Hevalrhs Ievalrhs.
-  intros s1 cur Hleq.
+  intros s1 cur new Hleq.
   assert (Egets' : getval s' = getval s) by auto.
   assert (Egets1 : getval s1 = getval s0) by auto.
   red. intros I0s Icorrs.
@@ -1472,7 +1479,9 @@ apply solve_mut_ind.
     * apply Inv_corr_called; auto; [intuition |].
       destruct H as (*[_*) [_ [_ [H _] ] ] (*]*).
       destruct H as [H _]; auto.
-      now rewrite <- H; fold cur.
+      rewrite <- H, <- Egets1; fold cur.
+      apply D.LeqTrans with (y:=new); auto.
+      now unfold new.      
     * now apply Inv_corr_notcalled.
   (*+ now intuition.*)
   + intros _. clear - I1s0 I0s. simpl in *. now fsetdec.
@@ -1488,7 +1497,7 @@ apply solve_mut_ind.
   destruct_pose_state s1.
   destruct_pose_state s2.
   intros Hnstabx s' Hevalrhs Ievalrhs.
-  intros s0' cur Hleq new s0'' Hhand Hsolveall Isolveall.
+  intros s0' cur new Hleq s0'' Hhand Hsolveall Isolveall.
   intros I0s Icorrs.
   assert (Egets' : getval s' = getval s) by auto.
   (*assert (Hstaxs' : is_stable x s') by (simpl; now fsetdec).*)
@@ -1590,8 +1599,8 @@ apply solve_mut_ind.
       assert (Evalz0' : getval s0' z = getval s0 z) by auto.
       assert (ne : x <> z).
       { contradict Hleq. subst z.
-        unfold cur. rewrite Evalz0', Evalz0, <- Evalz1, Hvals1.
-        now apply D.JoinUnique. }
+        unfold cur.
+        now rewrite Evalz0', Evalz0, <- Evalz1, Hvals1. }
       destruct (Isiginfls' z) as [Htmp1 _].
       rewrite Hvals', Evalz0, Einfls, <- Einfls1 in Htmp1; auto.
       apply incl_tran with (m:=get_infl s1 z); auto.

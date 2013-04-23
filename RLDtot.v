@@ -18,6 +18,8 @@ Module SolverRLDtotal (Sys : CSysJoinSemiLat)
 Module Var := Sys.V.
 Module D   := Sys.D.
 
+Module Import UtilD := UtilJoin (D).
+
 Module Import VSetFacts := WFactsOn (Var) (VSet).
 Module Import VSetProps := WPropertiesOn (Var) (VSet).
 (*Module Import VSetDecide := WDecideOn (Var) (VSet).*)
@@ -112,10 +114,10 @@ Fixpoint solve (n : nat) (x : Var.t) (s : state) : Error state :=
           do p <- F x (evalget k x) s0;
           let (d,s1) := p in
           let cur := getval s1 x in
-            if D.leq d cur then
+          let new := D.join cur d in
+            if D.leq new cur then
               return _ s1
             else
-              let new := D.join cur d in
               let s2 := setval x new s1 in
               let (w,s3) := extract_work x s2 in
                 solve_all k w s3
@@ -168,10 +170,10 @@ Lemma solve_step n x s :
     do p <- F x (evalget n x) s0;
     let (d,s1) := p in
     let cur := getval s1 x in
-      if D.leq d cur then
+    let new := D.join cur d in
+      if D.leq new cur then
         return _ s1
       else
-        let new := D.join cur d in
         let s2 := setval x new s1 in
         let (w,s3) := extract_work x s2 in
           solve_all n w s3.
@@ -203,6 +205,9 @@ Module SI := RLDtoti.SolverRLDtotalI (Sys) (VSet) (VMap).
 
 Module Var := Sys.V.
 Module D   := Sys.D.
+
+Module Import UtilD := UtilJoin (D).
+
 Definition F := Sys.F.
 
 Module Import Defs := Solvers.Defs (Sys).
@@ -542,7 +547,7 @@ induction n as [| n [IHeval [IHwrapx [IHevalrhs [IHsol IHsolall] ] ] ] ].
     set (s4' := SI.handle_work w (SI.rem_infl x s3')).
     assert (Hsims4 : sim s4 s4')
       by (apply sim_handle_work; now apply sim_rem_infl).
-    destruct (D.leq d1 cur) eqn:Ele.
+    destruct (D.leq new cur) eqn:Ele.
     * inversion Hsols; subst s5; clear Hsols.
       now exists s2'; auto.
     * apply IHsolall in Hsols.

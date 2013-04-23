@@ -374,6 +374,12 @@ module type JoinSemiLattice =
   val bot : t
  end
 
+module UtilJoin = 
+ functor (D:JoinSemiLattice) ->
+ struct 
+  
+ end
+
 type monadType = { tval : (__ -> __ -> __);
                    tbind : (__ -> __ -> __ -> (__ -> __) -> __) }
 
@@ -503,6 +509,8 @@ module SolverRLDtotal =
   
   module D = Sys.D
   
+  module UtilD = UtilJoin(D)
+  
   module VSetFacts = WFactsOn(Var)(VSet)
   
   module VSetProps = WPropertiesOn(Var)(VSet)
@@ -600,10 +608,10 @@ module SolverRLDtotal =
            (fun p ->
            let Pair (d, s1) = p in
            let cur = getval s1 x in
-           (match D.leq d cur with
+           let new0 = D.join cur d in
+           (match D.leq new0 cur with
             | True -> tval error0 s1
             | False ->
-              let new0 = D.join cur d in
               let s2 = setval x new0 s1 in
               let Pair (w, s3) = extract_work x s2 in solve_all k w s3)))
   

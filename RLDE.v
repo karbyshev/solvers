@@ -272,8 +272,9 @@ with Solve :
       let s1 := prepare x s in
       Eval_rhs x s1 (value d, s2) ->
       let s3 := rem_called x s2 in
-      let cur_val := getval s3 x in
-      D.Leq d cur_val ->
+      let cur := getval s3 x in
+      let new := D.join cur d in
+      D.Leq new cur ->
       Solve x s s3
   | Solve3 :
       forall x d s s2 s5 s6 work,
@@ -281,10 +282,10 @@ with Solve :
       let s1 := prepare x s in
       Eval_rhs x s1 (value d, s2) ->
       let s3 := rem_called x s2 in
-      let cur_val := getval s3 x in
-      ~ D.Leq d cur_val ->
-      let new_val := D.join cur_val d in
-      let s4 := setval x new_val s3 in
+      let cur := getval s3 x in
+      let new := D.join cur d in
+      ~ D.Leq new cur ->
+      let s4 := setval x new s3 in
       (work, s5) = extract_work x s4 ->
       SolveAll work s5 s6 ->
       Solve x s s6
@@ -423,55 +424,64 @@ apply solve_mut_min.
 
 (* Solve 2 *)
 - idtac.
-  intros x d1 s s1 Hnstaxs s0 Heval Ieval s2 cur Hleq s3 Hsol.
+  intros x d1 s s1 Hnstaxs s0 Heval Ieval s2 cur new Hleq s3 Hsol.
   red in Ieval.
-  inversion Hsol as [| ? ? ? ? s1' Heval' | ? ? ? ? ? s1' Heval' | ? ? ? ? ? ? ? ? s1' Heval'].
-  + subst s3; easy.
+  inversion Hsol as [| ? ? ? ? s0' Heval' | ? ? ? ? ? s0' Heval' | ? ? ? ? ? ? ? ? s0' Heval'].
+  + now subst s3.
   + assert (Htmp := Ieval _ Heval').
     now inversion Htmp; subst.
-  + idtac.
+  + unfold s0' in Heval'.
     assert (Htmp := Ieval _ Heval').
     unfold s2.
     now inversion Htmp; subst s7 s3.
-  + idtac.
-    subst s4 s7.
+  + subst s4 s7.
     assert (Htmp := Ieval _ Heval').
-    unfold cur, new_val, cur_val, cur_val0 in *.
-    now inversion Htmp; subst s9 s10 s8 s5 d1.
+    inversion Htmp.
+    unfold new0, cur1, cur0 in H0.
+    unfold new, cur in Hleq.
+    unfold s8, s10 in H0.
+    subst d1.
+    now rewrite H3, <- H6 in H0.
 
 (* Solve 3 *)
 - idtac.
   intros x d1 s s1 s4 s5 w.
   intros Hnstaxs s0 Heval Ieval.
-  intros s2 cur Hnleq new s3 Hwork Hsolall Isolall.
+  intros s2 cur new Hnleq s3 Hwork Hsolall Isolall.
   red. intros s5' Hsol'.
-  inversion Hsol' as [| ? ? ? ? s0' Heval' | ? ? ? ? ? s1' Heval' | ? ? ? ? ? ? ? ? s1' Heval'];
-    [subst s5'; easy | | |].
+  inversion Hsol' as [| ? ? ? ? s0' Heval' | ? ? ? ? ? s0' Heval' | ? ? ? ? ? ? ? ? s0' Heval'].
+  + now subst s5'.
   + idtac.
     unfold cur in Hnleq.
     red in Ieval.
     assert (Htmp := Ieval _ Heval').
     now inversion Htmp; subst s5' s7 d; clear Htmp.
   + idtac.
-    unfold cur in Hnleq.
-    unfold cur_val in H0.
-    red in Ieval.
+    unfold s0' in Heval'.
     assert (Htmp := Ieval _ Heval').
-    inversion Htmp; subst s5' d; clear Htmp.
-    unfold s9 in H0. now rewrite <- H6 in H0.
+    subst s5' s6.
+    inversion Htmp; clear Htmp.
+    unfold new, cur in Hnleq.
+    unfold new0, cur0, cur1 in H0.
+    subst d.
+    unfold s8,s9 in H0.
+    now rewrite H1, <- H4 in H0.
   + clear H Hnstaxs.
     assert (Htmp := Ieval _ Heval'); clear Heval Ieval.
+    subst s5' s6.
     inversion Htmp; clear Htmp.
-    unfold new, cur in s3.
-    unfold new_val, cur_val in s11.
-    unfold s3 in Hwork.
-    unfold s11, s12 in H1.
-    rewrite <- H7, H3 in H1.
+    unfold new, cur in Hnleq.
+    unfold new0, cur0, cur1 in H0.
+    unfold s10, s12 in H0.
+    rewrite H3, <- H5 in H0.
     assert (Hw : (w,s4) = (work,s8)).
-    { rewrite Hwork, H1, H6.
-      unfold s2, s10.
-      now rewrite <- H7, H3. }
-    inversion Hw; subst s8 work.
+    { rewrite Hwork, H1.
+      subst s11.
+      unfold s3, new, cur.
+      unfold new0, cur0.
+      unfold s10, s12.
+      now rewrite H3, H4, <- H5. }
+    inversion Hw; subst s8 work; clear Hw.
     now eapply Isolall; eauto.
 
 (* SolveAll 0 *)
@@ -972,7 +982,7 @@ apply solve_mut_min.
 
 (* Solve2 *)
 - idtac.
-  intros x d s s1 Hxnsta s0 Hevalrhs Hevalrhssim s2 cur Hleq.
+  intros x d s s1 Hxnsta s0 Hevalrhs Hevalrhssim s2 cur new Hleq.
   red. intros s' Hsims.
   assert (Hxnsta' : ~ SI.is_stable x s')
     by (contradict Hxnsta; now eapply sim_is_stable; eauto).
@@ -985,15 +995,16 @@ apply solve_mut_min.
     by (eapply sim_is_called; eauto).*)
   pose (s2' := SI.rem_called x s1').
   pose (cur' := SI.getval s2' x).
+  pose (new' := SI.D.join cur' d).
   assert (Hsims1' : sim s2 s2') by (apply sim_rem_called; auto).
-  assert (Hle' : SI.D.Leq d cur')
-    by (unfold cur'; now erewrite <- sim_getval; eauto).
+  assert (Hle' : SI.D.Leq new' cur')
+    by (unfold new',cur'; now erewrite <- sim_getval; eauto).
   exists s2'. split; auto.
   now eapply (SI.Solve2); eauto.
 
 (* Solve3 *)
 - idtac.
-  intros x d s s1 s4 s5 w Hxnsta s0 Hevalrhs Hevalrhssim s2 cur Hleq new s3 Hw Hsolall Hsolallsim.
+  intros x d s s1 s4 s5 w Hxnsta s0 Hevalrhs Hevalrhssim s2 new cur Hleq s3 Hw Hsolall Hsolallsim.
   red. intros s' Hsims.
   assert (Hxnsta' : ~ SI.is_stable x s')
     by (contradict Hxnsta; now eapply sim_is_stable; eauto).
@@ -1008,7 +1019,7 @@ apply solve_mut_min.
   pose (cur' := SI.getval s2' x).
   pose (new' := SI.D.join cur' d).
   assert (Hsims2' : sim s2 s2') by (apply sim_rem_called; auto).
-  assert (Hnle' : ~ SI.D.Leq d cur')
+  assert (Hnle' : ~ SI.D.Leq new' cur')
     by (unfold new', cur'; now erewrite <- sim_getval; eauto).
   pose (s3' := SI.setval x new' s2').
   assert (Hsims3 : sim s3 s3').

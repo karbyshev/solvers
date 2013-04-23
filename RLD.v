@@ -226,18 +226,19 @@ with Solve :
       ~ is_stable x s ->
       let s1 := prepare x s in
       Eval_rhs x s1 (d, s2) ->
-      let cur_val := getval s2 x in
-      D.Leq d cur_val ->
+      let cur := getval s2 x in
+      let new := D.join cur d in
+      D.Leq new cur ->
       Solve x s s2
   | Solve2 :
       forall x d s s2 s5 s6 work,
       ~ is_stable x s ->
       let s1 := prepare x s in
       Eval_rhs x s1 (d, s2) ->
-      let cur_val := getval s2 x in
-      ~ D.Leq d cur_val ->
-      let new_val := D.join cur_val d in
-      let s4 := setval x new_val s2 in
+      let cur := getval s2 x in
+      let new := D.join cur d in
+      ~ D.Leq new cur ->
+      let s4 := setval x new s2 in
       (work, s5) = extract_work x s4 ->
       SolveAll work s5 s6 ->
       Solve x s s6
@@ -353,46 +354,52 @@ apply solve_mut_min.
 
 (* Solve 1 *)
 - idtac.
-  intros x d1 s s1 Hnstaxs s0 Heval Ieval cur Hleq.
+  intros x d1 s s1 Hnstaxs s0 Heval Ieval cur new Hleq.
   red. intros s1' Hsol'.
   red in Ieval.
-  inversion Hsol' as [| ? ? ? ? ? s0' Heval' |];
-    [subst s1'; easy |  |].
+  inversion Hsol' as [| ? ? ? ? ? s0' Heval' | ? ? ? ? ? ? ? ? s0' Heval' ].
+  + now subst s1'.
   + unfold s0' in Heval'.
     assert (Htmp := Ieval _ Heval').
     now inversion Htmp.
   + subst s2 s6.
-    assert (Htmp := Ieval _ H0).
+    assert (Htmp := Ieval _ Heval').
     inversion Htmp.
-    unfold cur_val0 in H1.
-    unfold cur in Hleq.
-    now rewrite <- H7, <- H6 in H1.
+    unfold new0, cur1, cur0 in H0.
+    unfold new, cur in Hleq.
+    subst d1.
+    now rewrite H3, <- H6 in H0.
 
 (* Solve 2 *)
 - idtac.
   intros x d1 s s1 s3 s4 w.
   intros Hnstaxs s0 Heval Ieval.
-  intros cur Hnleq new s2 Hwork Hsolall Isolall.
+  intros cur new Hnleq s2 Hwork Hsolall Isolall.
   red. intros s4' Hsol'.
-  inversion Hsol' as [| ? ? ? ? ? s0' Heval' |];
-    [subst s4'; easy |  |].
-  + unfold cur in Hnleq.
-    unfold cur_val in H0.
-    red in Ieval.
+  inversion Hsol' as [| ? ? ? ? ? s0' Heval' | ? ? ? ? ? ? ? ? s0' Heval' ].
+  + now subst s4'.
+  + unfold s0' in Heval'.
     assert (Htmp := Ieval _ Heval').
-    inversion Htmp; subst s4' d; clear Htmp.
-    now rewrite <- H6 in H0.
-  + clear H Hnstaxs.
-    assert (Htmp := Ieval _ H0); clear Heval Ieval.
+    subst s4' s5.
     inversion Htmp; clear Htmp.
-    unfold new, cur in s2.
-    unfold new_val, cur_val in s10.
-    unfold s2 in Hwork.
-    unfold s10 in H2.
-    rewrite <- H8, H4 in H2.
-    assert (Hw : (w,s3) = (work,s7))
-      by (rewrite Hwork, H2, H7; auto).
-    inversion Hw; subst s7 work.
+    unfold new, cur in Hnleq.
+    unfold new0, cur0, cur1 in H0.
+    subst d.
+    now rewrite H1, <- H4 in H0.
+  + clear H Hnstaxs.
+    assert (Htmp := Ieval _ Heval'); clear Heval Ieval.
+    subst s4' s5.
+    inversion Htmp; clear Htmp.
+    unfold new, cur in Hnleq.
+    unfold new0, cur0, cur1 in H0.
+    rewrite H3, <- H5 in H0.
+    assert (Hw : (w,s3) = (work,s7)).
+    { rewrite Hwork, H1.
+      subst s9.
+      unfold s2, new, cur.
+      unfold new0, cur0.
+      now rewrite H3, H4, <- H5. }
+    inversion Hw; subst s7 work; clear Hw.
     now eapply Isolall; eauto.
 
 (* SolveAll 0 *)
@@ -828,7 +835,7 @@ apply solve_mut_min.
 
 (* Solve1 *)
 - idtac.
-  intros x d s s1 Hxnsta s0 Hevalrhs Hevalrhssim cur Hleq.
+  intros x d s s1 Hxnsta s0 Hevalrhs Hevalrhssim cur new Hleq.
   red. intros s' Hsims.
   assert (Hxnsta' : ~ SI.is_stable x s')
     by (contradict Hxnsta; now eapply sim_is_stable; eauto).
@@ -839,16 +846,17 @@ apply solve_mut_min.
   clear Hevalrhssim. subst d'.
   pose (s1'' := SI.rem_called x s1').
   pose (cur' := SI.getval s1'' x).
+  pose (new' := D.join cur' d).
   assert (Hsims1' : sim s1 s1'') by (apply sim_rem_called; auto).
-  assert (Hle' : SI.D.Leq d cur')
-    by (unfold cur'; now erewrite <- sim_getval; eauto).
+  assert (Hle' : SI.D.Leq new' cur')
+    by (unfold new',cur'; now erewrite <- sim_getval; eauto).
   exists s1''. split; auto.
   eapply (SI.Solve1); eauto.
 
 (* Solve2 *)
 - idtac.
   intros x d s s1 s4 s5 w.
-  intros Hxnsta s0 Hevalrhs Hevalrhssim cur Hleq new s3 Hw Hsolall Hsolallsim.
+  intros Hxnsta s0 Hevalrhs Hevalrhssim cur new Hleq s3 Hw Hsolall Hsolallsim.
   red. intros s' Hsims.
   assert (Hxnsta' : ~ SI.is_stable x s')
     by (contradict Hxnsta; now eapply sim_is_stable; eauto).
@@ -861,8 +869,8 @@ apply solve_mut_min.
   pose (cur' := SI.getval s2' x).
   pose (new' := SI.D.join cur' d).
   assert (Hsims1' : sim s1 s2') by (apply sim_rem_called; auto).
-  assert (Hnle' : ~ SI.D.Leq d cur')
-    by (unfold cur'; now erewrite <- sim_getval; eauto).
+  assert (Hnle' : ~ SI.D.Leq new' cur')
+    by (unfold new',cur'; now erewrite <- sim_getval; eauto).
   pose (s3' := SI.setval x new' s2').
   assert (Hsims3 : sim s3 s3').
   { unfold s3, s3', new, new', cur, cur'.
@@ -1427,7 +1435,7 @@ apply solve_mut_min.
 (* Solve 2 *)
 - idtac.
   intros x d s s1 s3 s4 w.
-  intros Hnstaxs s0 _ Ievalrhs cur Hnleq new s2 Hw _ Isolveall.
+  intros Hnstaxs s0 _ Ievalrhs cur new Hnleq s2 Hw _ Isolveall.
   assert (H : s0 < s) by (apply prec_prepare; auto).
   clear Hnstaxs.
   apply (precEq_state_trans Isolveall); clear Isolveall.
@@ -1454,12 +1462,10 @@ apply solve_mut_min.
   rewrite getval_sigma in Hvals1x.
   split.
   + intros u. destruct (Var.eq_dec x u) as [e | n].
-    * subst u. rewrite Hvals1x.
-      now apply D.JoinUnique.
+    * subst u. now rewrite Hvals1x.
     * now rewrite Hvals1; auto.
   + contradict Hnleq. unfold cur.
-    rewrite getval_sigma, <- Hnleq, Hvals1x.
-    now apply D.JoinUnique.
+    now rewrite getval_sigma, <- Hnleq, Hvals1x.
 
 (* SolveAll 0 *)
 - idtac. now auto.
@@ -1473,14 +1479,14 @@ Lemma prec_call_SolveAll x s d s1 s3 w :
   ~ is_stable x s ->
   let s0 := prepare x s in
   Eval_rhs x s0 (d, s1) ->
-  let cur_val := getval s1 x in
-  ~ D.Leq d cur_val ->
-  let new_val := D.join cur_val d in
-  let s2 := setval x new_val s1 in
+  let cur := getval s1 x in
+  let new := D.join cur d in
+  ~ D.Leq new cur ->
+  let s2 := setval x new s1 in
   (w, s3) = extract_work x s2 ->
   s3 < s.
 Proof.
-intros Hnstaxs s0 Evalrhs cur Hnleq new s2 Hw.
+intros Hnstaxs s0 Evalrhs cur new Hnleq s2 Hw.
 assert (H : s0 < s) by (apply prec_prepare; auto).
 clear Hnstaxs.
 apply precEq_invariant in Evalrhs.
@@ -1505,8 +1511,7 @@ rewrite !getval_sigma in Hvals1.
 rewrite getval_sigma in Hvals1x.
 split.
 + intros u. destruct (Var.eq_dec x u) as [e | n].
-  * subst u. rewrite Hvals1x.
-    now apply D.JoinUnique.
+  * subst u. now rewrite Hvals1x.
   * now rewrite Hvals1; auto.
 + contradict Hnleq. unfold cur.
   now rewrite getval_sigma, <- Hnleq, Hvals1x.
@@ -1556,10 +1561,10 @@ assert (Hevalrhs : Eval_rhs x s0 (d,s1))
 pose (cur := getval s1 x).
 pose (new := D.join cur d).
 destruct (D.eq_dec new cur) as [e | n].
-- assert (Hleq : D.Leq d cur) by now rewrite <- e; subst.
+- assert (Hleq : D.Leq new cur) by now rewrite <- e.
   exists s1. now apply Solve1 with (d:=d); auto.
-- assert (Hnleq : ~ D.Leq d cur).
-  { contradict n. unfold new. now apply UtilD.joinSubsume2. }
+- assert (Hnleq : ~ D.Leq new cur).
+  { contradict n. unfold new. now apply D.LeqAntisym. }
   pose (s2 := setval x new s1).
   destruct (extract_work x s2) as [w s3] eqn: Hwork.
   symmetry in Hwork.
