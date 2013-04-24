@@ -1184,8 +1184,9 @@ Definition Inv_EvalGet
   Inv_corr s ->
   Inv_0 s' /\
   Inv_1 s s' /\
-  (forall d, od = value d ->
-   d = getval s' y /\ is_called x s') /\
+  (forall d,
+    od = value d ->
+    d = getval s' y /\ is_called x s') /\
   (od = error -> ~ is_called x s') /\
   is_stable y s' /\
   Inv_sigma s s' /\
@@ -1234,18 +1235,19 @@ Definition Inv_Wrap_Eval_x
   Inv_sigma_infl s s' /\
   legal (rhs x) ps' /\
   (od = error -> ~ is_called x s') /\
-  (forall d, od = value d -> subtree (rhs x) ps' = Ans d) /\
+  (forall d,
+    od = value d -> subtree (rhs x) ps' = Ans d) /\
   (* case: x is called in s' *)
   (forall d,
-   od = value d ->
-   valid (getval s) ps ->
-   (forall p,
+    od = value d ->
+    valid (getval s) ps ->
+    (forall p,
       In p ps -> In x (get_infl s (fst p))) ->
-   is_called x s' /\
-   valid (getval s') ps' /\
-   (forall p,
+    is_called x s' /\
+    valid (getval s') ps' /\
+    (forall p,
       In p ps' -> In x (get_infl s' (fst p))) /\
-   Inv_corr_var s' x) /\
+    Inv_corr_var s' x) /\
   (* monotonic case *)
   (forall mu,
     is_monotone rhs ->
@@ -1270,15 +1272,16 @@ Definition Inv_Eval_rhs
      D.Leq (snd p) (getval s' (fst p))) /\
   legal (rhs x) ps /\
   (od = error -> ~ is_called x s') /\
-  (forall d, od = value d -> subtree (rhs x) ps = Ans d) /\
   (forall d,
-   od = value d ->
-   is_called x s' /\
-   d = [[rhs x]]* (getval s') /\
-   deps (rhs x) (getval s') = ps /\
-   (forall p,
+    od = value d -> subtree (rhs x) ps = Ans d) /\
+  (forall d,
+    od = value d ->
+    is_called x s' /\
+    d = [[rhs x]]* (getval s') /\
+    deps (rhs x) (getval s') = ps /\
+    (forall p,
       In p ps -> In x (get_infl s' (fst p))) /\
-   Inv_corr_var s' x) /\
+    Inv_corr_var s' x) /\
   (* monotonic case *)
   (forall mu,
     is_monotone rhs ->
