@@ -125,6 +125,12 @@ Definition rem_stable x (s : state) : state :=
 Definition is_called x (s : state) :=
   let '(_, _, _, called) := s in VS.In x called.
 
+Lemma is_called_dec x (s : state) :
+  { is_called x s } + {~ is_called x s }.
+Proof.
+destruct_state s; simpl. now apply VSetProps.In_dec.
+Qed.
+
 Definition get_called (s : state) :=
   let '(_, _, _, called) := s in called.
 
@@ -1098,6 +1104,755 @@ apply SI.exactness with (mu:=mu) in Hsolall';
 now rewrite (sim_getval Hsims).
 Qed.
 
+Section termination.
+
+Require Import Rels.
+Require Import Arith.
+Require Import Omega.
+
+(* We prove termination of RLD on the two assumptions: *)
+Variable Hasc : ascending_chain D.Leq.
+
+Variable varSet : {s : VS.t | forall x, VS.In x s}.
+Let V := proj1_sig varSet.
+Let cardV := VS.cardinal V.
+
+Definition varVec :
+  {n : nat &
+    {v : vector Var.t n &
+       forall x, {i : {k : nat | k < n} | nth v i = x}}}.
+Proof.
+pose (l := VS.elements V).
+destruct (vector_of l) as [n v] eqn:Hl.
+exists n, v.
+intros x.
+assert (Hx : has v x).
+{ assert (Htmp:= InA_has).
+  specialize Htmp with (l:=l) (a:=x).
+  rewrite Hl in Htmp.
+  apply Htmp; clear Htmp.
+  apply elements_1.
+  now apply (proj2_sig varSet). }
+exists (find Var.eq_dec Hx).
+now apply nth_find.
+Defined.
+
+Definition phi (f : Var.t -> D.t) : vector D.t _ :=
+  let v := projT1 (projT2 varVec) in map v f.
+
+Definition psi (dv : vector D.t (projT1 varVec)) : Var.t -> D.t :=
+  fun x =>
+    let v := projT1 (projT2 varVec) in
+    let H := projT2 (projT2 varVec) in
+    let i := proj1_sig (H x) in
+      nth dv i.
+
+Lemma psi_phi f : psi (phi f) = f.
+extensionality x.
+unfold phi, psi.
+rewrite nth_map.
+f_equal.
+now apply (proj2_sig (projT2 (projT2 varVec) x)).
+Qed.
+
+Lemma phi_inj f g : phi f = phi g -> f = g.
+Proof.
+intros H.
+rewrite <- (psi_phi f).
+rewrite <- (psi_phi g).
+now f_equal.
+Qed.
+
+(* TODO : rename lemmas *)
+Let R_phi (R : relation D.t) : relation (Var.t -> D.t)
+  := fun f g => lp_vector R (phi f) (phi g).
+
+Lemma leqF_sub_inverse_lp_vector f g :
+  leqF f g -> R_phi D.Leq f g. 
+Proof.
+intros H.
+unfold R_phi.
+apply lp_vector_nth.
+intros i.
+unfold phi.
+now rewrite !nth_map.
+Qed.
+
+Lemma lem4 f g :
+  strict (inv (leqF (X:=Var.t))) f g ->
+  strict (inv (lp_vector D.Leq (n:=projT1 varVec)))
+         (phi f) (phi g).
+Proof.
+intros [H ne].
+unfold inv, strict.
+unfold inv, strict in H.
+split; [now apply leqF_sub_inverse_lp_vector |
+        intros e; now apply phi_inj in e].
+Qed.
+
+Lemma lem4_bis :
+  inclusion
+    _
+    (strict (inv (leqF (X:=Var.t))))
+    (fun f g =>
+       (strict (inv (lp_vector D.Leq (n:=projT1 varVec))))
+         (phi f)
+         (phi g)).
+Proof.
+unfold inclusion. intros f g.
+now apply lem4.
+Qed.
+
+Lemma prec_1_wf :
+  well_founded (strict (inv (leqF (X:=Var.t)))).
+Proof.
+pose (H := fun n => asc_lp_vector (D.eq_dec) (n:=n) Hasc).
+unfold ascending_chain in H.
+specialize H with (projT1 varVec).
+apply wf_inverse_image with (f:=phi) in H.
+now apply (wf_incl _ _ _ lem4_bis).
+Qed.
+
+Lemma subset_V s : VS.Subset s V.
+Proof.
+intros x _.
+now apply (proj2_sig varSet).
+Qed.
+Hint Resolve subset_V.
+
+Lemma le_cardVar s : VS.cardinal s <= cardV.
+Proof.
+now apply VSetProps.subset_cardinal; auto.
+Qed.
+Hint Resolve le_cardVar.
+
+Lemma cardVar_equal_V s :
+  VS.cardinal s = cardV ->
+  VS.Equal s V.
+Proof.
+intros H.
+apply subset_antisym; [now apply subset_V |].
+intros x Hx.
+destruct (VSetProps.In_dec x s) as [e | n]; auto.
+assert (Hcard : VSet.cardinal s < VSet.cardinal V)
+  by (apply VSetProps.subset_cardinal_lt with x; auto).
+rewrite H in Hcard.
+now apply Lt.lt_irrefl in Hcard.
+Qed.
+
+Definition strictS (R : relation VS.t) : relation VS.t :=
+  fun s t => R s t /\ ~ VS.Equal s t.
+
+Lemma card_Acc n :
+  forall s,
+    n + VS.cardinal s = cardV ->
+    Acc (strictS (inv (VS.Subset))) s.
+Proof.
+apply (lt_wf_ind n); clear n.
+intros n IH.
+intros s H.
+constructor.
+intros t Ht.
+unfold strictS, inv in Ht.
+pose (d := VS.diff t s).
+assert (Hd : ~ VS.Empty d).
+{ clear - Ht.
+  destruct Ht as [Hst Hne].
+  contradict Hne. now fsetdec. }
+assert (Hdcard : VS.cardinal d <> 0).
+{ contradict Hd. now apply VSetProps.cardinal_inv_1. }
+assert (Hdcardpos : VS.cardinal d > 0).
+{ unfold gt. now apply neq_0_lt; auto. }
+assert (Et : VS.Equal t (VS.union s d)) by fsetdec.
+assert (Hs' : VS.cardinal t = VS.cardinal s + VS.cardinal d)
+  by (rewrite Et; apply VSetProps.union_cardinal; now fsetdec).
+pose (m := n - VS.cardinal d).
+assert (Hdn : VS.cardinal d <= n).
+{ apply plus_le_reg_l with (VS.cardinal s).
+  rewrite (plus_comm _ n), H, <- Hs'.
+  now auto. }
+assert (Hm : m < n) by (apply lt_minus; auto).
+assert (Hm1 : m + VS.cardinal t = cardV)
+  by (unfold m; rewrite Hs', <- H; omega).
+now apply IH with m.
+Qed.
+
+Lemma prec_2_wf : well_founded (strictS (inv VS.Subset)).
+Proof.
+unfold well_founded.
+intros s.
+pose (n := cardV - VS.cardinal s).
+assert (Hcard : VS.cardinal s <= cardV) by auto.
+assert (H : n + VS.cardinal s = cardV) by (unfold n; omega).
+now apply card_Acc with n.
+Qed.
+
+Definition sigma_fun (sigma : Sigma.t D.t) : Var.t -> D.t :=
+  fun x =>
+    match Sigma.find x sigma with
+      | Some d => d
+      | None => D.bot
+    end.
+
+Lemma getval_sigma sigma infl stable called :
+  getval (sigma, infl, stable, called) = sigma_fun sigma.
+Proof.
+easy.
+Qed.
+
+Lemma sigma_fun_add_eq sigma x d :
+  sigma_fun (Sigma.add x d sigma) x = d.
+Proof.
+unfold sigma_fun. now rewrite add_eq_o.
+Qed.
+Hint Rewrite sigma_fun_add_eq.
+
+Lemma sigma_fun_add_neq sigma x y d (Hn : x <> y) : 
+  sigma_fun (Sigma.add x d sigma) y = sigma_fun sigma y.
+Proof.
+unfold sigma_fun. now rewrite add_neq_o.
+Qed.
+
+Definition prec_sigma : relation (Sigma.t D.t) :=
+  fun sigma1 sigma2 =>
+    strict (inv (leqF (X:=Var.t))) (sigma_fun sigma1) (sigma_fun sigma2).
+
+Lemma prec_sigma_irrefl s : ~ prec_sigma s s.
+Proof.
+now firstorder.
+Qed.
+Hint Resolve prec_sigma_irrefl.
+
+Lemma prec_sigma_trans : transitive _ prec_sigma.
+Proof.
+intros s1 s2 s3.
+unfold prec_sigma, strict, inv.
+intros [H10 H11].
+intros [H20 H21].
+split.
+- now eapply leqF_trans; eauto.
+- contradict H11. rewrite <- H11 in H20.
+  now apply leqF_antisym.
+Qed.
+
+Lemma prec_sigma_wf : well_founded prec_sigma.
+Proof.
+unfold prec_sigma.
+apply wf_inverse_image with (f:=sigma_fun).
+now apply prec_1_wf.
+Qed.
+
+Definition prec_stable : relation VS.t :=
+  fun s1 s2 => strictS (inv VS.Subset) s1 s2.
+
+Lemma prec_stable_irrefl s : ~ prec_stable s s.
+Proof.
+now firstorder.
+Qed.
+Hint Resolve prec_stable_irrefl.
+
+Lemma prec_stable_trans : transitive _ prec_stable.
+Proof.
+intros s1 s2 s3.
+unfold prec_stable, strict, inv.
+intros [H10 H11].
+intros [H20 H21].
+split.
+- now fsetdec.
+- contradict H11. now fsetdec.
+Qed.
+
+Lemma prec_stable_wf : well_founded prec_stable.
+Proof.
+refine prec_2_wf.
+Qed.
+
+Definition prec_ss := lexprod prec_sigma prec_stable.
+
+Lemma prec_ss_wf : well_founded prec_ss.
+Proof.
+apply lexprod_wf;
+  [now apply prec_sigma_wf | now apply prec_stable_wf].
+Qed.
+
+Definition forget_infl_cal (s : state) :=
+  let '(sigma, _, stable, _) := s in (sigma, stable).
+
+Definition prec_state : relation state :=
+  fun s1 s2 => prec_ss (forget_infl_cal s1) (forget_infl_cal s2).
+
+Lemma prec_state_wf : well_founded prec_state.
+Proof.
+unfold prec_state.
+apply wf_inverse_image with (f:=forget_infl_cal).
+now apply prec_ss_wf.
+Qed.
+
+Local Infix "<" := prec_state (at level 70).
+
+Lemma prec_state_irrefl s : ~ s < s.
+Proof.
+unfold prec_state, prec_ss.
+destruct_state s. simpl.
+intros H. inversion H; subst; now firstorder.
+Qed.
+Hint Resolve prec_state_irrefl.
+
+Lemma prec_state_trans : transitive _ prec_state.
+Proof.
+intros s1 s2 s3.
+unfold prec_state, prec_ss.
+destruct_state s1.
+destruct_state s2.
+destruct_state s3.
+simpl.
+intros H1 H2.
+inversion H1 as [? ? ? ? H10 | ? ? ? H10]; subst; clear H1.
+- inversion H2 as [? ? ? ? H20 | ? ? ? H20]; subst; clear H2.
+  + left. now eapply prec_sigma_trans; eauto.
+  + now left.
+- inversion H2 as [? ? ? ? H20 | ? ? ? H20]; subst; clear H2.
+  + now left.
+  + right. now eapply prec_stable_trans; eauto.
+Qed.
+
+Definition eq_state : relation state :=
+  fun s1 s2 =>
+    let '(sigma1, _, stable1, _) := s1 in
+    let '(sigma2, _, stable2, _) := s2 in
+      sigma1 = sigma2 /\ stable1 = stable2.
+
+Lemma eq_state_refl : reflexive _ eq_state.
+Proof.
+intros s; now destruct_state s.
+Qed.
+Hint Resolve eq_state_refl.
+
+Lemma eq_state_sym : symmetric _ eq_state.
+Proof.
+intros s1 s2.
+destruct_state s1.
+destruct_state s2.
+intros [? ?].
+now subst.
+Qed.
+Hint Resolve eq_state_sym.
+
+Lemma eq_state_trans : transitive _ eq_state.
+Proof.
+intros s1 s2 s3.
+destruct_pose_state s1.
+destruct_pose_state s2.
+destruct_pose_state s3.
+intros H1 H2.
+destruct H1 as [H10 H11]; destruct H2 as [H20 H21].
+red. split; congruence.
+Qed.
+
+Definition precEq_state : relation state
+  := fun s1 s2 => prec_state s1 s2 \/ eq_state s1 s2.
+
+Local Infix "<=" := precEq_state (at level 70).
+
+Lemma precEq_state_refl : reflexive _ precEq_state.
+Proof.
+now right; auto.
+Qed.
+Hint Resolve precEq_state_refl.
+
+Lemma prec_eq_state s1 s2 s3 :
+  s1 < s2 -> eq_state s2 s3 -> s1 < s3.
+Proof.
+destruct_state s1.
+destruct_state s2.
+destruct_state s3.
+intros H1 H2. destruct H2.
+inversion H1; subst; clear H1.
+- now left.
+- now right.
+Qed.
+
+Lemma eq_prec_state s1 s2 s3 :
+  eq_state s1 s2 -> s2 < s3 -> s1 < s3.
+Proof.
+destruct_state s1.
+destruct_state s2.
+destruct_state s3.
+intros H1 H2. destruct H1.
+inversion H2; subst; clear H2.
+- now left.
+- now right.
+Qed.
+
+Lemma prec_precEq_state s1 s2 s3 :
+  s1 < s2 -> s2 <= s3 -> s1 < s3.
+Proof.
+intros H1 H2. destruct H2 as [H2 | H2].
+- now eapply prec_state_trans; eauto.
+- now eapply prec_eq_state; eauto.
+Qed.
+
+Lemma precEq_prec_state s1 s2 s3 :
+  s1 <= s2 -> s2 < s3 -> s1 < s3.
+Proof.
+intros H1 H2. destruct H1 as [H1 | H1].
+- now eapply prec_state_trans; eauto.
+- now eapply eq_prec_state; eauto.
+Qed.
+
+Lemma precEq_state_trans : transitive _ precEq_state.
+Proof.
+intros s1 s2 s3.
+intros H1 H2.
+destruct H1 as [H1 | H1]. 
+- left. now eapply prec_precEq_state; eauto.
+- destruct H2 as [H2 | H2].
+  + left. now eapply eq_prec_state; eauto.
+  + right. now eapply eq_state_trans; eauto.
+Qed.
+
+Lemma eq_precEq_state s1 s2 s3 :
+  eq_state s1 s2 -> s2 <= s3 -> s1 <= s3.
+Proof.
+intros H1 H2. destruct H2 as [H2 | H2].
+- left. now eapply eq_prec_state; eauto.
+- right. now eapply eq_state_trans; eauto.
+Qed.
+
+Lemma precEq_eq_state s1 s2 s3 :
+  s1 <= s2 -> eq_state s2 s3 -> s1 <= s3.
+Proof.
+intros H1 H2. destruct H1 as [H1 | H1].
+- left. now eapply prec_eq_state; eauto.
+- right. now eapply eq_state_trans; eauto.
+Qed.
+
+Lemma eq_state_add_infl x y s :
+  eq_state (add_infl x y s) s.
+Proof.
+now destruct_state s.
+Qed.
+Local Hint Resolve eq_state_add_infl.
+
+Lemma eq_state_rem_called x s :
+  eq_state (rem_called x s) s.
+Proof.
+now destruct_state s.
+Qed.
+Local Hint Resolve eq_state_rem_called.
+
+Lemma prec_prepare x s :
+  ~ is_stable x s -> prepare x s < s.
+Proof.
+destruct_state s.
+intros H. simpl in *.
+unfold prec_state, prec_ss.
+right.
+unfold prec_stable, strictS, inv; simpl.
+split; now fsetdec.
+Qed.
+
+Lemma precEq_invariant :
+  (forall x y s1 ds2,
+     EvalGet x y s1 ds2 ->
+     let (d,s2) := ds2 in s2 <= s1) /\
+  (forall x f,
+     EvalGet_x x f ->
+     forall y s1 ds2,
+       f y s1 ds2 ->
+       let (d,s2) := ds2 in s2 <= s1) /\
+  (forall x f t s1 ds2,
+     Wrap_Eval_x x f t s1 ds2 ->
+     let (d,s2) := ds2 in s2 <= s1) /\
+  (forall x s1 ds2,
+     Eval_rhs x s1 ds2 ->
+     let (d,s2) := ds2 in s2 <= s1) /\
+  (forall x s1 s2,
+     Solve x s1 s2 -> s2 <= s1) /\
+  (forall w s1 s2,
+     SolveAll w s1 s2 -> s2 <= s1).
+Proof.
+apply solve_mut_min.
+
+(* EvalGet0 *)
+- idtac. intros x y s s0 _ Isol s1 d Hcal.
+  subst s1.
+  now apply eq_precEq_state with (s2:=s0); auto.
+
+(* EvalGet1 *)
+- idtac. intros x y s s0 _ Isol s1 d Hcal.
+  subst s1.
+  now apply eq_precEq_state with (s2:=s0); auto.
+
+(* EvalGet_x *)
+- idtac. easy.
+
+(* Wrap_Eval_x *)
+- idtac. intros x f.
+  induction t as [c | a k IH].
+  + intros s [d s0] _ Ievalx Ht.
+    now destruct (wrap_rel_ErrorT_State_Ans_inv Ht); subst.
+  + intros s [d1 s1] Hevalx Ievalx Ht.
+    case d1 as [d1 |].
+    * destruct (wrap_rel_ErrorT_State_Que_value_inv Ht)
+        as [d0 [s0 [Hf Hwrapf] ] ]; clear Ht.
+      assert (H := Ievalx _ _ _ Hf).
+      simpl in H.
+      assert (H1 : s1 <= s0) by (eapply (@IH _ _ (value d1,s1)); eauto).
+      now eapply precEq_state_trans; eauto.
+    * destruct (wrap_rel_ErrorT_State_Que_error_inv Ht)
+        as [Hf | [d0 [s0 [Hf Hwrapf] ] ] ];
+        clear Ht; [now clear - Ievalx Hf; firstorder |].
+      assert (H := Ievalx _ _ _ Hf).
+      simpl in H.
+      assert (H1 : s1 <= s0) by (eapply (@IH _ _ (error,s1)); eauto).
+      now eapply precEq_state_trans; eauto.
+
+(* Eval_rhs *)
+- idtac. now firstorder.
+
+(* Solve 0 *)
+- idtac. easy.
+
+(* Solve 1 *)
+- idtac.
+  intros x s s1 Hnstaxs s0 _.
+  assert (H : s0 < s) by (apply prec_prepare; auto).
+  left. now eapply precEq_prec_state; eauto.
+
+(* Solve 2 *)
+- idtac.
+  intros x d s s1 Hnstaxs s0 _ Ievalrhs s2 cur new Hleq.
+  assert (H : s0 < s) by (apply prec_prepare; auto).
+  left.
+  assert (H0 : s2 <= s1) by (subst s2; right; auto).
+  apply (precEq_prec_state H0).
+  now eapply precEq_prec_state; eauto.
+
+(* Solve 3 *)
+- idtac.
+  intros x d s s1 s3 s4 w.
+  intros Hnstaxs s0 _ Ievalrhs s2 cur new Hnleq s5 Hw _ Isolveall.
+  assert (H : s0 < s) by (apply prec_prepare; auto).
+  clear Hnstaxs.
+  apply (precEq_state_trans Isolveall); clear Isolveall.
+  left.
+  apply (precEq_prec_state (s2:=s0)); auto.
+  apply (@precEq_state_trans s3 s1 s0); auto.
+  clear - Hnleq Hw.
+  assert (Hwspec := extract_work_spec Hw); clear Hw.
+  assert (Hvals1 : forall z, x <> z -> getval s3 z = getval s1 z).
+  { clear - Hwspec. intros z ne.
+    destruct_state s1; destruct_state s3.
+    destruct Hwspec as [_ [H _ ] ].
+    simpl in *; subst. now rewrite add_neq_o. }
+  assert (Hvals1x : getval s3 x = D.join cur d).
+  { clear - Hwspec.
+    destruct_state s1; destruct_state s3.
+    destruct Hwspec as [_ [H _ ] ].
+    simpl in *; subst. now rewrite add_eq_o. }
+  left. unfold prec_state, prec_ss.
+  destruct_state s1.
+  destruct_state s3.
+  left. unfold prec_sigma, strict, inv.
+  rewrite !getval_sigma in Hvals1.
+  rewrite getval_sigma in Hvals1x.
+  split.
+  + intros u. destruct (Var.eq_dec x u) as [e | n].
+    * subst u. now rewrite Hvals1x.
+    * now rewrite Hvals1; auto.
+  + contradict Hnleq.
+    unfold new; rewrite <- Hvals1x, Hnleq.
+    now unfold cur; simpl.
+
+(* SolveAll 0 *)
+- idtac. now auto.
+
+(* SolveAll 1 *)
+- idtac. intros x xs s s0 s1 _ Isolve _ Isolveall.
+  now eapply precEq_state_trans; eauto.
+Qed.
+
+Lemma prec_call_SolveAll x s d s1 s4 w :
+  ~ is_stable x s ->
+  let s0 := prepare x s in
+  Eval_rhs x s0 (value d, s1) ->
+  let s2 := rem_called x s1 in
+  let cur := getval s2 x in
+  let new := D.join cur d in
+  ~ D.Leq new cur ->
+  let s3 := setval x new s2 in
+  (w, s4) = extract_work x s3 ->
+  s4 < s.
+Proof.
+intros Hnstaxs s0 Evalrhs s2 cur new Hnleq s3 Hw.
+assert (H12 : getval s2 = getval s1).
+{ extensionality u. now destruct_state s1. }
+assert (H : s0 < s) by (apply prec_prepare; auto).
+clear Hnstaxs.
+apply precEq_invariant in Evalrhs.
+apply (@prec_state_trans s4 s0 s); auto. clear H.
+apply (prec_precEq_state (s2:=s1)); auto. clear Evalrhs.
+assert (Hwspec := extract_work_spec Hw); clear Hw.
+assert (Hvals1 : forall z, x <> z -> getval s4 z = getval s1 z).
+{ clear - Hwspec. intros z ne.
+  destruct_state s1; destruct_state s4.
+  destruct Hwspec as [_ [H _ ] ].
+  simpl in *; subst. now rewrite add_neq_o. }
+assert (Hvals1x : getval s4 x = D.join cur d).
+{ clear - Hwspec.
+  destruct_state s1; destruct_state s4.
+  destruct Hwspec as [_ [H _ ] ].
+  simpl in *; subst. now rewrite add_eq_o. }
+unfold prec_state, prec_ss.
+destruct_state s1.
+destruct_state s4.
+left. unfold prec_sigma, strict, inv.
+rewrite !getval_sigma in Hvals1.
+rewrite getval_sigma in Hvals1x.
+split.
++ intros u. destruct (Var.eq_dec x u) as [e | n].
+  * subst u. now rewrite Hvals1x.
+  * now rewrite Hvals1; auto.
++ contradict Hnleq. unfold cur.
+  subst s2; unfold rem_called.
+  now rewrite getval_sigma, <- Hnleq, Hvals1x.
+Qed.
+
+Theorem termination :
+  forall x s1, exists s2, Solve x s1 s2.
+Proof.
+intros x s; revert s x.
+apply (@well_founded_ind _ _ prec_state_wf
+        (fun s => forall x, exists s2, Solve x s s2)); auto.
+intros s IH x.
+destruct (is_stable_dec x s) as [Hstaxs | Hnstaxs];
+  [exists s; now apply Solve0 |].
+pose (s0 := prepare x s).
+assert (Hprecs0 : s0 < s) by (apply prec_prepare; auto).
+assert (Heval: forall y s1,
+                 s1 < s -> exists ds2, EvalGet x y s1 ds2).
+{ intros y s1 Hprecs1.
+  destruct (IH _ Hprecs1 y) as [s2 Hs2].
+  destruct (is_called_dec x s2) as [Hcal | Hncal].
+  - pose (s3 := add_infl y x s2).
+    pose (d := getval s2 y).
+    exists (value d, s3).
+    now apply EvalGet1 with (s0:=s2).
+  - pose (s3 := add_infl y x s2).
+    exists (error, s3).
+    now apply EvalGet0 with (s0:=s2). }
+pose (f := (fun y s' ds1' => EvalGet x y s' ds1')
+           : Var.t -> state -> Exc D.t * state -> Prop).
+assert (Hevalxf : EvalGet_x x f).
+{ apply EvalGet_x0.
+  intros y q0 [d q2] Hf. now firstorder. }
+assert (H : forall t q,
+              q < s -> exists ds1, Wrap_Eval_x x f t q ds1).
+{ induction t as [c | a k IHt].
+  - intros q _. exists (value c,q).
+    apply Wrap_Eval_x0; auto.
+    now apply wrapESAns.
+  - intros q Hprecq.
+    destruct (Heval a _ Hprecq) as [ [d0' s0'] Heval0'].
+    assert (Hf : f a q (d0',s0')) by (unfold f; auto).
+    assert (Hprecs0' : s0' < s).
+    { apply precEq_prec_state with (s2:=q); auto.
+      unfold f in Hf. now apply precEq_invariant in Hf. }
+    destruct d0' as [d0' |].
+    + destruct (IHt d0' _ Hprecs0') as [ [d1 s1] Hwrap']; clear IHt.
+      exists (d1,s1). apply Wrap_Eval_x0; auto.
+      eapply wrapESQueValue; eauto.
+      now inversion Hwrap'; subst.
+    + exists (error,s0').
+      apply Wrap_Eval_x0; auto.
+      now apply wrapESQueError.
+}
+destruct (H (rhs x) _ Hprecs0) as [ [d s1] Hwrapx]; clear H.
+assert (Hevalrhs : Eval_rhs x s0 (d,s1))
+  by (apply Eval_rhs0 with (f:=f); auto).
+case d as [d |]; [| exists s1; now apply Solve1 ].
+pose (s2 := rem_called x s1).
+pose (cur := getval s2 x).
+pose (new := D.join cur d).
+destruct (D.eq_dec new cur) as [e | n].
+- assert (Hleq : D.Leq new cur) by now rewrite <- e.
+  exists s2. now apply Solve2 with (d:=d); auto.
+- assert (Hnleq : ~ D.Leq new cur).
+  { contradict n. unfold new. now apply D.LeqAntisym. }
+  pose (s3 := setval x new s2).
+  destruct (extract_work x s3) as [w s4] eqn: Hwork.
+  symmetry in Hwork.
+  assert (Hprecs3 : s4 < s)
+    by (eapply prec_call_SolveAll; eauto).  
+  assert (H : forall l q, q < s -> exists s4, SolveAll l q s4).
+  { induction l as [| y ys IHl].
+    - intros q _. exists q. now apply SolveAll0.
+    - intros q Hprecq.
+      destruct (IH _ Hprecq y) as [s3' Hsol'].
+      assert (Hprecs3' : s3' < s).
+      { apply precEq_prec_state with (s2:=q); auto.
+        now apply precEq_invariant in Hsol'. }
+      destruct (IHl _ Hprecs3') as [s5 Hsolall']; clear IHl.
+      exists s5. now eapply SolveAll2; eauto. }  
+  destruct (H w _ Hprecs3) as [s5 Hsolall].
+  exists s5.
+  now eapply Solve3; eauto.
+Qed.
+
+End termination.
+
 End algorithm.
 
 End SolverRLDE.
+
+(* TODO this should go elsewhere actually *)
+Module SolverRLDEmain (Sys : CSys)
+                     (VSet : SetsTypeOn (Sys.V))
+                     (VMap : MapsTypeOn (Sys.V)).
+
+Include SolverRLDE (Sys)(VSet)(VMap).
+
+Section exactness.
+
+Variable Hpure : forall x, is_pure (F x).
+(*Definition rhs x : Tree Var.t D.t D.t := proj1_sig (Hpure x).*)
+
+Definition is_local_solution
+             (X X' : VS.t) (sigma : Var.t -> Sys.D.t)
+  := (forall z, VS.In z X -> VS.In z X') /\
+     (forall z v d,
+        VS.In z X' ->
+        In (v,d) (deps (rhs Hpure z) sigma) ->
+        VS.In v X') /\
+     (forall z,
+        VS.In z X' ->
+        D.Leq ([[rhs Hpure z]]* sigma) (sigma z)).
+
+Definition sol_ext X X' sigma (H : is_local_solution X X' sigma)
+  : Var.t -> Sys.D.t
+  := fun z =>
+       match VSetProps.In_dec z X' with
+           | left _ => sigma z
+           | right _ => Sys.D.top
+       end.
+
+Import Defs.
+
+Lemma sol_ext_is_solution
+        X X' sigma (H : @is_local_solution X X' sigma) :
+  is_solution (rhs Hpure) (@sol_ext X X' sigma H).
+Proof.
+destruct H as [H [H0 H1] ].
+intros x.
+unfold sol_ext at 2.
+case (VSetProps.In_dec x X') as [e | n]; auto.
+- rewrite <- (@deps_val_compat _ _ _ _ _ sigma _ eq_refl).
+  + now apply H1.
+  + intros [v d] i.
+    unfold sol_ext; simpl.
+    now case (VSetProps.In_dec v X'); firstorder.
+Qed.
+
+End exactness.
+End SolverRLDEmain.
