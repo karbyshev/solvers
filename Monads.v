@@ -86,7 +86,7 @@ Defined.
 Definition State (S : Type) : monadType.
 exists
   (fun X => S -> X * S)
-  (fun X => fun x s => (x, s))
+  (fun X => fun (x:X) (s:S) => (x, s))
   (fun X Y => fun t f =>
     fun s => let '(x1, s1) := t s in f x1 s1).
 - unfold val_bind; intuition.
@@ -118,7 +118,7 @@ Defined.
 Definition Error : monadType.
 exists
   (fun X => Exc X)
-  (fun X x => value x)
+  (fun X (x:X) => value x)
   (fun X Y t f => 
     match t with 
       | error => error
