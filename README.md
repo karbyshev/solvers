@@ -29,4 +29,4 @@ by Aleksandr Karbyshev and Kalmer Apinis, 2013.
   - Strategy trees
 
 ## Build
-Compiles with Coq 8.4
+Compiles with Coq 8.4pl2
