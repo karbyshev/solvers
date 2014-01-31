@@ -123,7 +123,7 @@ Fixpoint solve (n : nat) (x : Var.t) (s : state) : Error state :=
                 solve_all k w s3
   end
 
-with solve_all (n : nat) w s : Error state :=
+with solve_all (n : nat) (w : list Var.t) s : Error state :=
   match n with
     | 0 => error
     | S k =>
